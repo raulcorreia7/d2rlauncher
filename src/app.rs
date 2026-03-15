@@ -1,7 +1,7 @@
 use fltk::{
     app, button,
     enums::{Color, Event, FrameType},
-    frame, group,
+    frame, group, image,
     prelude::*,
     window,
 };
@@ -15,6 +15,8 @@ use crate::domain::Region;
 use crate::error::Error;
 use crate::launcher;
 use crate::ping;
+
+const ICON_DATA: &[u8] = include_bytes!("../icon.png");
 
 const DEFAULT_BTN_COLOR: Color = Color::from_hex(0x2d2d44);
 const HIGHLIGHT_BTN_COLOR: Color = Color::from_hex(0x4a3f6e);
@@ -234,6 +236,11 @@ fn create_window(width: i32, height: i32) -> window::Window {
         .with_label(constants::APP_TITLE);
     wind.set_color(Color::from_hex(0x1a1a2e));
     wind.make_resizable(false);
+
+    if let Ok(icon) = image::PngImage::from_data(ICON_DATA) {
+        wind.set_icon(Some(icon));
+    }
+
     wind
 }
 
