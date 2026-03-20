@@ -100,7 +100,10 @@ cargo build --release
 
 ## Releases
 
-The repository includes a GitHub Actions release workflow that publishes:
+The repository includes:
+
+- a minimal CI workflow for pull requests and `main`
+- a tag-driven release workflow that publishes:
 
 - Windows x86
 - Windows x64
@@ -110,9 +113,11 @@ The repository includes a GitHub Actions release workflow that publishes:
 
 Release flow:
 
-1. Update `version` in `Cargo.toml`.
-2. Push a tag like `v1.0.0`, or run the `Release` workflow manually with `version=1.0.0`.
-3. The workflow validates `cargo fmt`, `cargo test`, and `cargo clippy`, then uploads packaged binaries to the GitHub release.
+1. Review `scripts/release.sh --help`.
+2. Run `scripts/release.sh 1.0.0`.
+3. Review the generated `CHANGELOG.md`, release commit, and tag.
+4. Push `main` and the tag with the commands printed by the script.
+5. The release workflow validates the crate and uploads packaged binaries to the GitHub release.
 
 ## Debug Mode
 
