@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.1] - 2026-03-20
+
+- refactor(core): centralize runtime logging
+- ci(release): package binary contents only
+
+
 ## [0.1.0] - 2026-03-20
 
 - feat(core): initial cross-platform D2R launcher with ping monitoring
