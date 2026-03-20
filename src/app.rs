@@ -1,6 +1,6 @@
 use fltk::{
     app, button,
-    enums::{Align, Color, Event, FrameType},
+    enums::{Align, Color, Event, Font, FrameType},
     frame, group, image,
     prelude::*,
     window,
@@ -18,37 +18,38 @@ use crate::ping;
 
 const ICON_DATA: &[u8] = include_bytes!("../icon.png");
 
-const WINDOW_COLOR: Color = Color::from_hex(0x0b1220);
-const SURFACE_COLOR: Color = Color::from_hex(0x121b2e);
-const IDLE_CARD_COLOR: Color = Color::from_hex(0x162238);
-const SELECTED_CARD_COLOR: Color = Color::from_hex(0x1b2941);
-const DEFAULT_CARD_COLOR: Color = Color::from_hex(0x172435);
-const PRIMARY_ACTION_COLOR: Color = Color::from_hex(0xc67a11);
-const SECONDARY_ACTION_COLOR: Color = Color::from_hex(0x24324b);
-const CANCEL_ACTION_COLOR: Color = Color::from_hex(0x475569);
-const TITLE_TEXT_COLOR: Color = Color::from_hex(0xf4e6cd);
-const BODY_TEXT_COLOR: Color = Color::from_hex(0xe2e8f0);
-const MUTED_TEXT_COLOR: Color = Color::from_hex(0x94a3b8);
+const WINDOW_COLOR: Color = Color::from_hex(0x090807);
+const SURFACE_COLOR: Color = Color::from_hex(0x15110d);
+const IDLE_CARD_COLOR: Color = Color::from_hex(0x1a1510);
+const SELECTED_CARD_COLOR: Color = Color::from_hex(0x201811);
+const DEFAULT_CARD_COLOR: Color = Color::from_hex(0x19140f);
+const PRIMARY_ACTION_COLOR: Color = Color::from_hex(0xa66a19);
+const SECONDARY_ACTION_COLOR: Color = Color::from_hex(0x2b2218);
+const CANCEL_ACTION_COLOR: Color = Color::from_hex(0x403427);
+const TITLE_TEXT_COLOR: Color = Color::from_hex(0xe3c48a);
+const BODY_TEXT_COLOR: Color = Color::from_hex(0xe6dccb);
+const MUTED_TEXT_COLOR: Color = Color::from_hex(0xb0a08a);
 const BADGE_TEXT_COLOR: Color = Color::from_hex(0xe2e8f0);
 const COUNTDOWN_TEXT_COLOR: Color = Color::from_hex(0xfbbf24);
-const SELECTED_ACCENT_COLOR: Color = Color::from_hex(0xc67a11);
-const DEFAULT_ACCENT_COLOR: Color = Color::from_hex(0x2d7f7b);
-const IDLE_ACCENT_COLOR: Color = Color::from_hex(0x20314b);
+const SELECTED_ACCENT_COLOR: Color = Color::from_hex(0xd29a3a);
+const DEFAULT_ACCENT_COLOR: Color = Color::from_hex(0x7a6843);
+const IDLE_ACCENT_COLOR: Color = Color::from_hex(0x463729);
 
 const COUNTDOWN_SECONDS: i32 = 5;
 const PING_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
 
 const TITLE_HEIGHT: i32 = 24;
 const SUBTITLE_HEIGHT: i32 = 16;
-const STATUS_HEIGHT: i32 = 42;
+const STATUS_ROW_HEIGHT: i32 = 42;
 const REGION_CARD_HEIGHT: i32 = 62;
-const COUNTDOWN_ROW_HEIGHT: i32 = 30;
 const ACTION_ROW_HEIGHT: i32 = 40;
 const CARD_ACCENT_WIDTH: i32 = 5;
 const PING_BADGE_WIDTH: i32 = 74;
 const CANCEL_BUTTON_WIDTH: i32 = 108;
 const LAYOUT_MARGIN: i32 = 14;
 const LAYOUT_SPACING: i32 = 8;
+const PANEL_PADDING_X: i32 = 12;
+const PANEL_PADDING_Y: i32 = 8;
 
 pub fn run() -> Result<(), Error> {
     logln!("[d2rlauncher] Starting...");
@@ -82,6 +83,7 @@ pub fn run() -> Result<(), Error> {
     wind.end();
 
     let countdown = Rc::new(RefCell::new(CountdownState::new(COUNTDOWN_SECONDS)));
+    bind_window_click_cancel(&mut wind, sender);
 
     wind.show();
 
@@ -127,6 +129,16 @@ fn spawn_ping_threads(sender: app::Sender<Message>) {
     }
 }
 
+fn bind_window_click_cancel(wind: &mut window::Window, sender: app::Sender<Message>) {
+    wind.handle(move |_wind, event| {
+        if matches!(event, Event::Push) {
+            sender.send(Message::CancelCountdown);
+        }
+
+        false
+    });
+}
+
 fn handle_message(
     msg: Message,
     config: &mut Config,
@@ -165,6 +177,10 @@ fn handle_message(
         Message::SetDefaultSelected => {
             cancel_countdown(countdown, ui);
             let region = selection.selected_region;
+            if selection.default_region == region {
+                return Ok(None);
+            }
+
             logln!("[d2rlauncher] Setting default region to {}", region);
 
             selection.default_region = region;
@@ -246,8 +262,7 @@ fn scaled_window_height(scale: UiScale) -> i32 {
         REGION_CARD_HEIGHT,
         REGION_CARD_HEIGHT,
         REGION_CARD_HEIGHT,
-        STATUS_HEIGHT,
-        COUNTDOWN_ROW_HEIGHT,
+        STATUS_ROW_HEIGHT,
         ACTION_ROW_HEIGHT,
     ];
 
@@ -348,22 +363,14 @@ fn ping_badge_label(ping_ms: Option<u32>) -> String {
     }
 }
 
-fn selection_summary(
-    region: Region,
-    default_region: Region,
-    ping_ms: Option<u32>,
-) -> (String, Color) {
+fn ready_message(region: Region, ping_ms: Option<u32>) -> (String, Color) {
     let ping = ping_presentation(ping_ms);
-    let summary = match ping_ms {
-        Some(ms) if region == default_region => {
-            format!("{region} selected • {ms} ms • favorite")
-        }
-        Some(ms) => format!("{region} selected • {ms} ms"),
-        None if region == default_region => format!("{region} selected • favorite"),
-        None => format!("{region} selected"),
+    let label = match ping_ms {
+        Some(ms) => format!("Ready to launch {region} • {ms} ms"),
+        None => format!("Ready to launch {region}"),
     };
 
-    (summary, ping.summary_color)
+    (label, ping.summary_color)
 }
 
 fn countdown_message(region: Region, seconds: i32) -> String {
@@ -373,53 +380,75 @@ fn countdown_message(region: Region, seconds: i32) -> String {
 fn style_title(frame: &mut frame::Frame, scale: UiScale) {
     frame.set_label_size(scale.px(16));
     frame.set_label_color(TITLE_TEXT_COLOR);
+    frame.set_label_font(Font::TimesBold);
     frame.set_align(Align::Left | Align::Inside);
 }
 
 fn style_subtitle(frame: &mut frame::Frame, scale: UiScale) {
     frame.set_label_size(scale.px(10));
     frame.set_label_color(MUTED_TEXT_COLOR);
+    frame.set_label_font(Font::TimesItalic);
     frame.set_align(Align::Left | Align::Inside);
 }
 
-fn style_status_frame(frame: &mut frame::Frame, scale: UiScale, color: Color) {
-    frame.set_frame(FrameType::RoundedBox);
-    frame.set_color(SURFACE_COLOR);
+fn create_status_panel(scale: UiScale, label_color: Color) -> (group::Flex, frame::Frame) {
+    let mut panel = group::Flex::default().row();
+    panel.set_frame(FrameType::BorderBox);
+    panel.set_color(SURFACE_COLOR);
+    panel.set_margins(
+        scale.px(PANEL_PADDING_X),
+        scale.px(PANEL_PADDING_Y),
+        scale.px(PANEL_PADDING_X),
+        scale.px(PANEL_PADDING_Y),
+    );
+
+    let mut label = frame::Frame::default();
+    style_status_label(&mut label, scale, label_color);
+
+    panel.end();
+    (panel, label)
+}
+
+fn style_status_label(frame: &mut frame::Frame, scale: UiScale, color: Color) {
     frame.set_label_color(color);
     frame.set_label_size(scale.px(10));
+    frame.set_label_font(Font::Times);
     frame.set_align(Align::Left | Align::Inside);
 }
 
 fn style_action_button(btn: &mut button::Button, scale: UiScale, color: Color) {
-    btn.set_frame(FrameType::RoundedBox);
+    btn.set_frame(FrameType::UpBox);
     btn.set_color(color);
     btn.set_label_color(Color::White);
     btn.set_label_size(scale.px(11));
+    btn.set_label_font(Font::TimesBold);
 }
 
 fn style_card_title(frame: &mut frame::Frame, scale: UiScale) {
     frame.set_label_size(scale.px(13));
     frame.set_label_color(BODY_TEXT_COLOR);
+    frame.set_label_font(Font::TimesBold);
     frame.set_align(Align::Left | Align::Inside);
 }
 
 fn style_card_status(frame: &mut frame::Frame, scale: UiScale) {
     frame.set_label_size(scale.px(10));
     frame.set_label_color(MUTED_TEXT_COLOR);
+    frame.set_label_font(Font::Times);
     frame.set_align(Align::Left | Align::Inside);
 }
 
 fn style_ping_badge(frame: &mut frame::Frame, scale: UiScale) {
-    frame.set_frame(FrameType::RoundedBox);
+    frame.set_frame(FrameType::BorderBox);
     frame.set_label_size(scale.px(9));
     frame.set_label_color(BADGE_TEXT_COLOR);
+    frame.set_label_font(Font::TimesBold);
     frame.set_align(Align::Center | Align::Inside);
 }
 
 struct Ui {
     cards: Vec<RegionCard>,
-    summary_label: frame::Frame,
-    countdown_label: frame::Frame,
+    status_label: frame::Frame,
     launch_button: button::Button,
     default_button: button::Button,
     cancel_button: button::Button,
@@ -436,12 +465,12 @@ impl Ui {
         scale: UiScale,
         layout: &mut group::Flex,
     ) -> Self {
-        let mut title = frame::Frame::default().with_label("Pick Your Region");
+        let mut title = frame::Frame::default().with_label("Choose Your Region");
         style_title(&mut title, scale);
         layout.fixed(&title, scale.px(TITLE_HEIGHT));
 
         let mut subtitle =
-            frame::Frame::default().with_label("Lower ping usually feels better in game.");
+            frame::Frame::default().with_label("Choose your gateway into Sanctuary.");
         style_subtitle(&mut subtitle, scale);
         layout.fixed(&subtitle, scale.px(SUBTITLE_HEIGHT));
 
@@ -454,15 +483,10 @@ impl Ui {
             layout.fixed(&card.root, scale.px(REGION_CARD_HEIGHT));
         }
 
-        let mut summary_label = frame::Frame::default();
-        style_status_frame(&mut summary_label, scale, Color::White);
-        layout.fixed(&summary_label, scale.px(STATUS_HEIGHT));
+        let mut status_row = group::Flex::default().row();
+        status_row.set_spacing(scale.px(8));
 
-        let mut countdown_row = group::Flex::default().row();
-        countdown_row.set_spacing(scale.px(8));
-
-        let mut countdown_label = frame::Frame::default();
-        style_status_frame(&mut countdown_label, scale, COUNTDOWN_TEXT_COLOR);
+        let (_status_panel, status_label) = create_status_panel(scale, Color::White);
 
         let mut cancel_button = button::Button::default().with_label("Cancel");
         style_action_button(&mut cancel_button, scale, CANCEL_ACTION_COLOR);
@@ -473,9 +497,9 @@ impl Ui {
             cancel_sender.send(Message::CancelCountdown);
         });
 
-        countdown_row.fixed(&cancel_button, scale.px(CANCEL_BUTTON_WIDTH));
-        countdown_row.end();
-        layout.fixed(&countdown_row, scale.px(COUNTDOWN_ROW_HEIGHT));
+        status_row.fixed(&cancel_button, scale.px(CANCEL_BUTTON_WIDTH));
+        status_row.end();
+        layout.fixed(&status_row, scale.px(STATUS_ROW_HEIGHT));
 
         let mut action_row = group::Flex::default().row();
         action_row.set_spacing(scale.px(8));
@@ -501,8 +525,7 @@ impl Ui {
 
         let mut ui = Self {
             cards,
-            summary_label,
-            countdown_label,
+            status_label,
             launch_button,
             default_button,
             cancel_button,
@@ -551,19 +574,18 @@ impl Ui {
         }
 
         let ping_ms = self.selected_ping();
-        let (summary, summary_color) =
-            selection_summary(self.selected_region, self.default_region, ping_ms);
-        self.summary_label.set_label(&summary);
-        self.summary_label.set_label_color(summary_color);
 
         match self.countdown_seconds {
             Some(seconds) => {
-                self.countdown_label
+                self.status_label
                     .set_label(&countdown_message(self.selected_region, seconds));
+                self.status_label.set_label_color(COUNTDOWN_TEXT_COLOR);
                 self.cancel_button.show();
             }
             None => {
-                self.countdown_label.set_label("");
+                let (status, color) = ready_message(self.selected_region, ping_ms);
+                self.status_label.set_label(&status);
+                self.status_label.set_label_color(color);
                 self.cancel_button.hide();
             }
         }
@@ -573,9 +595,13 @@ impl Ui {
 
         if self.selected_region == self.default_region {
             self.default_button.set_label("★ Favorite");
-            self.default_button.deactivate();
+            self.default_button.set_color(Color::from_hex(0x3a2d1c));
+            self.default_button.set_label_color(TITLE_TEXT_COLOR);
+            self.default_button.activate();
         } else {
             self.default_button.set_label("☆ Favorite");
+            self.default_button.set_color(SECONDARY_ACTION_COLOR);
+            self.default_button.set_label_color(BODY_TEXT_COLOR);
             self.default_button.activate();
         }
     }
@@ -603,7 +629,7 @@ impl RegionCard {
         let mut root = group::Flex::default().row();
         root.set_margins(scale.px(10), scale.px(10), scale.px(14), scale.px(10));
         root.set_spacing(scale.px(12));
-        root.set_frame(FrameType::RoundedBox);
+        root.set_frame(FrameType::BorderBox);
 
         let mut accent = frame::Frame::default();
         accent.set_frame(FrameType::FlatBox);
@@ -742,8 +768,7 @@ enum Message {
 #[cfg(test)]
 mod app_tests {
     use super::{
-        countdown_message, ping_badge_label, ping_presentation, region_status_label,
-        selection_summary,
+        countdown_message, ping_badge_label, ping_presentation, ready_message, region_status_label,
     };
     use crate::domain::Region;
 
@@ -754,9 +779,9 @@ mod app_tests {
     }
 
     #[test]
-    fn selection_summary_should_mark_default_region() {
-        let (summary, _) = selection_summary(Region::Asia, Region::Asia, Some(74));
-        assert_eq!(summary, "Asia selected • 74 ms • favorite");
+    fn ready_message_should_focus_on_launch_action() {
+        let (summary, _) = ready_message(Region::Asia, Some(74));
+        assert_eq!(summary, "Ready to launch Asia • 74 ms");
     }
 
     #[test]
