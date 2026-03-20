@@ -1,0 +1,167 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version from Cargo.toml, without the leading v"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name || inputs.version || github.run_id }}
+  cancel-in-progress: false
+
+env:
+  BINARY_NAME: d2rlauncher
+
+jobs:
+  prepare:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    outputs:
+      release_name: ${{ steps.meta.outputs.release_name }}
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            version="${{ inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+
+          cargo_version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)"
+
+          if [[ -z "$version" ]]; then
+            echo "Release version is required." >&2
+            exit 1
+          fi
+
+          if [[ "$cargo_version" != "$version" ]]; then
+            echo "Cargo.toml version ($cargo_version) does not match release version ($version)." >&2
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "release_name=D2R Launcher v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Run tests
+        run: cargo test --locked
+
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features --locked -- -D warnings
+
+      - name: Create GitHub release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh release view "${{ steps.meta.outputs.tag }}" > /dev/null 2>&1; then
+            echo "Release ${{ steps.meta.outputs.tag }} already exists."
+            exit 0
+          fi
+
+          gh release create "${{ steps.meta.outputs.tag }}" \
+            --title "${{ steps.meta.outputs.release_name }}" \
+            --target "${{ github.sha }}" \
+            --generate-notes
+
+  build:
+    name: Build ${{ matrix.platform }}
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            target: i686-pc-windows-msvc
+            platform: windows-x86
+            archive_extension: zip
+            binary_name: d2rlauncher.exe
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            platform: windows-x64
+            archive_extension: zip
+            binary_name: d2rlauncher.exe
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            platform: linux-x64
+            archive_extension: tar.gz
+            binary_name: d2rlauncher
+          - runner: macos-13
+            target: x86_64-apple-darwin
+            platform: macos-x64
+            archive_extension: tar.gz
+            binary_name: d2rlauncher
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build release binary
+        run: cargo build --locked --release --target ${{ matrix.target }}
+
+      - name: Package Unix archive
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          version="${{ needs.prepare.outputs.version }}"
+          archive_base="${{ env.BINARY_NAME }}-${version}-${{ matrix.platform }}"
+          staging_dir="dist/${archive_base}"
+
+          mkdir -p "$staging_dir"
+          cp "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" "$staging_dir/"
+          cp README.md "$staging_dir/"
+
+          tar -czf "dist/${archive_base}.tar.gz" -C dist "$archive_base"
+
+      - name: Package Windows archive
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = "${{ needs.prepare.outputs.version }}"
+          $archiveBase = "${{ env.BINARY_NAME }}-$version-${{ matrix.platform }}"
+          $stagingDir = "dist/$archiveBase"
+
+          New-Item -ItemType Directory -Force -Path $stagingDir | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" $stagingDir
+          Copy-Item README.md $stagingDir
+
+          Compress-Archive -Path "$stagingDir/*" -DestinationPath "dist/$archiveBase.zip" -Force
+
+      - name: Upload release asset
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          asset="dist/${{ env.BINARY_NAME }}-${{ needs.prepare.outputs.version }}-${{ matrix.platform }}.${{ matrix.archive_extension }}"
+          gh release upload "${{ needs.prepare.outputs.tag }}" "$asset" --clobber

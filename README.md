@@ -98,6 +98,21 @@ sudo pacman -S gtk3 libx11 libxext
 cargo build --release
 ```
 
+## Releases
+
+The repository includes a GitHub Actions release workflow that publishes:
+
+- Windows x86
+- Windows x64
+- Linux x64
+- macOS x64
+
+Release flow:
+
+1. Update `version` in `Cargo.toml`.
+2. Push a tag like `v1.0.0`, or run the `Release` workflow manually with `version=1.0.0`.
+3. The workflow validates `cargo fmt`, `cargo test`, and `cargo clippy`, then uploads packaged binaries to the GitHub release.
+
 ## Debug Mode
 
 Run from command line to see debug output:

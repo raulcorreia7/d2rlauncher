@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use surge_ping::{Client, Config, ICMP, PingIdentifier, PingSequence};
+use surge_ping::{Client, Config, PingIdentifier, PingSequence, ICMP};
 use tokio::runtime::Runtime;
 
 use crate::domain::Region;
