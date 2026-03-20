@@ -113,9 +113,14 @@ jobs:
             platform: linux-x64
             archive_extension: tar.gz
             binary_name: d2rlauncher
-          - runner: macos-13
+          - runner: macos-15-intel
             target: x86_64-apple-darwin
             platform: macos-x64
+            archive_extension: tar.gz
+            binary_name: d2rlauncher
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            platform: macos-arm64
             archive_extension: tar.gz
             binary_name: d2rlauncher
     steps:

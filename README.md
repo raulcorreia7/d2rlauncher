@@ -106,6 +106,7 @@ The repository includes a GitHub Actions release workflow that publishes:
 - Windows x64
 - Linux x64
 - macOS x64
+- macOS arm64
 
 Release flow:
 
