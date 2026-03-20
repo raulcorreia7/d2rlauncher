@@ -1,6 +1,6 @@
 use fltk::{
     app, button,
-    enums::{Align, Color, FrameType},
+    enums::{Align, Color, Event, FrameType},
     frame, group, image,
     prelude::*,
     window,
@@ -18,28 +18,31 @@ use crate::ping;
 
 const ICON_DATA: &[u8] = include_bytes!("../icon.png");
 
-const WINDOW_COLOR: Color = Color::from_hex(0x0f172a);
-const SURFACE_COLOR: Color = Color::from_hex(0x182338);
-const IDLE_REGION_COLOR: Color = Color::from_hex(0x22304a);
-const SELECTED_REGION_COLOR: Color = Color::from_hex(0x2563eb);
-const DEFAULT_REGION_COLOR: Color = Color::from_hex(0x0f766e);
-const SELECTED_DEFAULT_REGION_COLOR: Color = Color::from_hex(0xd97706);
-const PRIMARY_ACTION_COLOR: Color = Color::from_hex(0xf59e0b);
-const SECONDARY_ACTION_COLOR: Color = Color::from_hex(0x0f766e);
+const WINDOW_COLOR: Color = Color::from_hex(0x0b1220);
+const SURFACE_COLOR: Color = Color::from_hex(0x121b2e);
+const IDLE_CARD_COLOR: Color = Color::from_hex(0x162238);
+const SELECTED_CARD_COLOR: Color = Color::from_hex(0x1d2b43);
+const DEFAULT_CARD_COLOR: Color = Color::from_hex(0x162a2a);
+const SELECTED_DEFAULT_CARD_COLOR: Color = Color::from_hex(0x2a2618);
+const PRIMARY_ACTION_COLOR: Color = Color::from_hex(0xc67a11);
+const SECONDARY_ACTION_COLOR: Color = Color::from_hex(0x24324b);
 const CANCEL_ACTION_COLOR: Color = Color::from_hex(0x475569);
+const TITLE_TEXT_COLOR: Color = Color::from_hex(0xf4e6cd);
 const MUTED_TEXT_COLOR: Color = Color::from_hex(0x94a3b8);
+const BADGE_TEXT_COLOR: Color = Color::from_hex(0xe2e8f0);
 const COUNTDOWN_TEXT_COLOR: Color = Color::from_hex(0xfbbf24);
 
 const COUNTDOWN_SECONDS: i32 = 5;
 const PING_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
 
-const TITLE_HEIGHT: i32 = 28;
-const SUBTITLE_HEIGHT: i32 = 18;
-const REGION_BUTTON_HEIGHT: i32 = 56;
-const STATUS_HEIGHT: i32 = 34;
+const TITLE_HEIGHT: i32 = 24;
+const SUBTITLE_HEIGHT: i32 = 16;
+const STATUS_HEIGHT: i32 = 42;
+const REGION_CARD_HEIGHT: i32 = 62;
 const COUNTDOWN_ROW_HEIGHT: i32 = 30;
-const ACTION_ROW_HEIGHT: i32 = 38;
-const CANCEL_BUTTON_WIDTH: i32 = 116;
+const ACTION_ROW_HEIGHT: i32 = 40;
+const PING_BADGE_WIDTH: i32 = 86;
+const CANCEL_BUTTON_WIDTH: i32 = 108;
 
 pub fn run() -> Result<(), Error> {
     logln!("[d2rlauncher] Starting...");
@@ -145,8 +148,8 @@ fn handle_message(
             Ok(Some(region))
         }
         Message::Countdown(_) if countdown.borrow().is_cancelled() => Ok(None),
-        Message::Countdown(secs) => {
-            ui.show_countdown(secs);
+        Message::Countdown(seconds) => {
+            ui.show_countdown(seconds);
             Ok(None)
         }
         Message::CancelCountdown => {
@@ -185,8 +188,8 @@ fn cancel_countdown(countdown: &RefCell<CountdownState>, ui: &mut Ui) {
 fn schedule_countdown(state: Rc<RefCell<CountdownState>>, sender: app::Sender<Message>) {
     app::add_timeout3(1.0, move |_| match state.borrow_mut().tick() {
         CountdownProgress::Cancelled => {}
-        CountdownProgress::Running(secs) => {
-            sender.send(Message::Countdown(secs));
+        CountdownProgress::Running(seconds) => {
+            sender.send(Message::Countdown(seconds));
             schedule_countdown(state.clone(), sender);
         }
         CountdownProgress::Complete => {
@@ -196,8 +199,8 @@ fn schedule_countdown(state: Rc<RefCell<CountdownState>>, sender: app::Sender<Me
 }
 
 fn setup_theme() {
-    app::background(0x0f, 0x17, 0x2a);
-    app::background2(0x18, 0x23, 0x38);
+    app::background(0x0b, 0x12, 0x20);
+    app::background2(0x12, 0x1b, 0x2e);
     app::foreground(0xff, 0xff, 0xff);
 }
 
@@ -220,7 +223,7 @@ fn create_window(scale: UiScale) -> window::Window {
 
 fn create_layout(scale: UiScale) -> group::Flex {
     let mut col = group::Flex::default_fill().column();
-    col.set_margins(scale.px(12), scale.px(12), scale.px(12), scale.px(12));
+    col.set_margins(scale.px(14), scale.px(14), scale.px(14), scale.px(14));
     col.set_spacing(scale.px(8));
     col
 }
@@ -251,66 +254,61 @@ impl UiScale {
 
 #[derive(Debug, Clone, Copy)]
 struct PingPresentation {
-    color: Color,
+    badge_color: Color,
+    summary_color: Color,
     description: &'static str,
 }
 
 fn ping_presentation(ping_ms: Option<u32>) -> PingPresentation {
     match ping_ms {
         Some(ms) if ms < 80 => PingPresentation {
-            color: Color::from_hex(0x4ade80),
+            badge_color: Color::from_hex(0x1b4332),
+            summary_color: Color::from_hex(0x4ade80),
             description: "Excellent",
         },
         Some(ms) if ms < 140 => PingPresentation {
-            color: Color::from_hex(0xfacc15),
+            badge_color: Color::from_hex(0x5b4a11),
+            summary_color: Color::from_hex(0xfacc15),
             description: "Good",
         },
         Some(_) => PingPresentation {
-            color: Color::from_hex(0xf87171),
+            badge_color: Color::from_hex(0x5a1f1f),
+            summary_color: Color::from_hex(0xf87171),
             description: "High ping",
         },
         None => PingPresentation {
-            color: MUTED_TEXT_COLOR,
+            badge_color: Color::from_hex(0x24324b),
+            summary_color: MUTED_TEXT_COLOR,
             description: "Measuring ping",
         },
     }
 }
 
-fn region_button_color(selected: bool, is_default: bool) -> Color {
+fn region_card_color(selected: bool, is_default: bool) -> Color {
     match (selected, is_default) {
-        (true, true) => SELECTED_DEFAULT_REGION_COLOR,
-        (true, false) => SELECTED_REGION_COLOR,
-        (false, true) => DEFAULT_REGION_COLOR,
-        (false, false) => IDLE_REGION_COLOR,
+        (true, true) => SELECTED_DEFAULT_CARD_COLOR,
+        (true, false) => SELECTED_CARD_COLOR,
+        (false, true) => DEFAULT_CARD_COLOR,
+        (false, false) => IDLE_CARD_COLOR,
     }
 }
 
-fn region_button_label(
-    region: Region,
-    ping_ms: Option<u32>,
-    selected: bool,
-    is_default: bool,
-) -> String {
-    let badge = match (selected, is_default) {
-        (true, true) => "Selected • Default region",
-        (true, false) => "Selected",
+fn region_status_label(selected: bool, is_default: bool, ping_ms: Option<u32>) -> String {
+    let state = match (selected, is_default) {
+        (true, true) => "Selected • default region",
+        (true, false) => "Selected region",
         (false, true) => "Default region",
-        (false, false) => "",
+        (false, false) => "Click to select",
     };
 
-    let ping = ping_presentation(ping_ms);
-    let ping_text = match ping_ms {
-        Some(ms) => format!("{} • {ms} ms", ping.description),
-        None => ping.description.to_string(),
-    };
+    format!("{state} • {}", ping_presentation(ping_ms).description)
+}
 
-    let details = if badge.is_empty() {
-        ping_text
-    } else {
-        format!("{badge} • {ping_text}")
-    };
-
-    format!("{} {}\n{}", region.flag(), region, details)
+fn ping_badge_label(ping_ms: Option<u32>) -> String {
+    match ping_ms {
+        Some(ms) => format!("{ms} ms"),
+        None => "-- ms".to_string(),
+    }
 }
 
 fn selection_summary(
@@ -321,19 +319,16 @@ fn selection_summary(
     let ping = ping_presentation(ping_ms);
     let summary = match ping_ms {
         Some(ms) if region == default_region => {
-            format!(
-                "Selected: {region} • {} • {ms} ms • Default region",
-                ping.description
-            )
+            format!("Ready: {region} • {ms} ms • {} • Default", ping.description)
         }
-        Some(ms) => format!("Selected: {region} • {} • {ms} ms", ping.description),
+        Some(ms) => format!("Ready: {region} • {ms} ms • {}", ping.description),
         None if region == default_region => {
-            format!("Selected: {region} • {} • Default region", ping.description)
+            format!("Ready: {region} • {} • Default", ping.description)
         }
-        None => format!("Selected: {region} • {}", ping.description),
+        None => format!("Ready: {region} • {}", ping.description),
     };
 
-    (summary, ping.color)
+    (summary, ping.summary_color)
 }
 
 fn countdown_message(region: Region, seconds: i32) -> String {
@@ -341,13 +336,13 @@ fn countdown_message(region: Region, seconds: i32) -> String {
 }
 
 fn style_title(frame: &mut frame::Frame, scale: UiScale) {
-    frame.set_label_size(scale.px(20));
-    frame.set_label_color(Color::White);
+    frame.set_label_size(scale.px(16));
+    frame.set_label_color(TITLE_TEXT_COLOR);
     frame.set_align(Align::Left | Align::Inside);
 }
 
 fn style_subtitle(frame: &mut frame::Frame, scale: UiScale) {
-    frame.set_label_size(scale.px(11));
+    frame.set_label_size(scale.px(10));
     frame.set_label_color(MUTED_TEXT_COLOR);
     frame.set_align(Align::Left | Align::Inside);
 }
@@ -360,22 +355,34 @@ fn style_status_frame(frame: &mut frame::Frame, scale: UiScale, color: Color) {
     frame.set_align(Align::Left | Align::Inside);
 }
 
-fn style_region_button(btn: &mut button::Button, scale: UiScale) {
-    btn.set_frame(FrameType::RoundedBox);
-    btn.set_label_size(scale.px(13));
-    btn.set_label_color(Color::White);
-    btn.set_align(Align::Left | Align::Inside);
-}
-
 fn style_action_button(btn: &mut button::Button, scale: UiScale, color: Color) {
     btn.set_frame(FrameType::RoundedBox);
     btn.set_color(color);
     btn.set_label_color(Color::White);
-    btn.set_label_size(scale.px(12));
+    btn.set_label_size(scale.px(11));
+}
+
+fn style_card_title(frame: &mut frame::Frame, scale: UiScale) {
+    frame.set_label_size(scale.px(13));
+    frame.set_label_color(Color::White);
+    frame.set_align(Align::Left | Align::Inside);
+}
+
+fn style_card_status(frame: &mut frame::Frame, scale: UiScale) {
+    frame.set_label_size(scale.px(10));
+    frame.set_label_color(MUTED_TEXT_COLOR);
+    frame.set_align(Align::Left | Align::Inside);
+}
+
+fn style_ping_badge(frame: &mut frame::Frame, scale: UiScale) {
+    frame.set_frame(FrameType::RoundedBox);
+    frame.set_label_size(scale.px(10));
+    frame.set_label_color(BADGE_TEXT_COLOR);
+    frame.set_align(Align::Center | Align::Inside);
 }
 
 struct Ui {
-    buttons: Vec<RegionButton>,
+    cards: Vec<RegionCard>,
     summary_label: frame::Frame,
     countdown_label: frame::Frame,
     launch_button: button::Button,
@@ -394,22 +401,22 @@ impl Ui {
         scale: UiScale,
         layout: &mut group::Flex,
     ) -> Self {
-        let mut title = frame::Frame::default().with_label("Diablo II: Resurrected");
+        let mut title = frame::Frame::default().with_label("Pick Your Region");
         style_title(&mut title, scale);
         layout.fixed(&title, scale.px(TITLE_HEIGHT));
 
-        let mut subtitle = frame::Frame::default().with_label("Choose your region, then launch.");
+        let mut subtitle =
+            frame::Frame::default().with_label("Lower ping usually feels better in game.");
         style_subtitle(&mut subtitle, scale);
         layout.fixed(&subtitle, scale.px(SUBTITLE_HEIGHT));
 
-        let buttons = Region::ALL
+        let cards = Region::ALL
             .iter()
-            .map(|&region| RegionButton::new(region, sender, scale))
+            .map(|&region| RegionCard::new(region, sender, scale))
             .collect::<Vec<_>>();
 
-        let button_height = scale.px(REGION_BUTTON_HEIGHT);
-        for button in &buttons {
-            layout.fixed(&button.widget, button_height);
+        for card in &cards {
+            layout.fixed(&card.root, scale.px(REGION_CARD_HEIGHT));
         }
 
         let mut summary_label = frame::Frame::default();
@@ -425,8 +432,10 @@ impl Ui {
         let mut cancel_button = button::Button::default().with_label("Cancel");
         style_action_button(&mut cancel_button, scale, CANCEL_ACTION_COLOR);
         cancel_button.hide();
+
+        let cancel_sender = sender;
         cancel_button.set_callback(move |_| {
-            sender.send(Message::CancelCountdown);
+            cancel_sender.send(Message::CancelCountdown);
         });
 
         countdown_row.fixed(&cancel_button, scale.px(CANCEL_BUTTON_WIDTH));
@@ -438,21 +447,25 @@ impl Ui {
 
         let mut launch_button = button::Button::default();
         style_action_button(&mut launch_button, scale, PRIMARY_ACTION_COLOR);
+
+        let launch_sender = sender;
         launch_button.set_callback(move |_| {
-            sender.send(Message::LaunchSelected);
+            launch_sender.send(Message::LaunchSelected);
         });
 
         let mut default_button = button::Button::default();
         style_action_button(&mut default_button, scale, SECONDARY_ACTION_COLOR);
+
+        let default_sender = sender;
         default_button.set_callback(move |_| {
-            sender.send(Message::SetDefaultSelected);
+            default_sender.send(Message::SetDefaultSelected);
         });
 
         action_row.end();
         layout.fixed(&action_row, scale.px(ACTION_ROW_HEIGHT));
 
         let mut ui = Self {
-            buttons,
+            cards,
             summary_label,
             countdown_label,
             launch_button,
@@ -487,22 +500,18 @@ impl Ui {
     }
 
     fn update_ping(&mut self, region: Region, ping_ms: Option<u32>) {
-        if let Some(button) = self
-            .buttons
-            .iter_mut()
-            .find(|button| button.region == region)
-        {
-            button.ping_ms = ping_ms;
+        if let Some(card) = self.cards.iter_mut().find(|card| card.region == region) {
+            card.ping_ms = ping_ms;
         }
 
         self.refresh();
     }
 
     fn refresh(&mut self) {
-        for button in &mut self.buttons {
-            button.refresh(
-                button.region == self.selected_region,
-                button.region == self.default_region,
+        for card in &mut self.cards {
+            card.refresh(
+                card.region == self.selected_region,
+                card.region == self.default_region,
             );
         }
 
@@ -532,50 +541,83 @@ impl Ui {
             self.default_button.deactivate();
         } else {
             self.default_button
-                .set_label(&format!("Set {} as default", self.selected_region));
+                .set_label(&format!("Save {} as default", self.selected_region));
             self.default_button.activate();
         }
     }
 
     fn selected_ping(&self) -> Option<u32> {
-        self.buttons
+        self.cards
             .iter()
-            .find(|button| button.region == self.selected_region)
-            .and_then(|button| button.ping_ms)
+            .find(|card| card.region == self.selected_region)
+            .and_then(|card| card.ping_ms)
     }
 }
 
-struct RegionButton {
-    widget: button::Button,
+struct RegionCard {
+    root: group::Flex,
+    title: frame::Frame,
+    status: frame::Frame,
+    ping_badge: frame::Frame,
     region: Region,
     ping_ms: Option<u32>,
 }
 
-impl RegionButton {
+impl RegionCard {
     fn new(region: Region, sender: app::Sender<Message>, scale: UiScale) -> Self {
-        let mut widget = button::Button::default();
-        style_region_button(&mut widget, scale);
-        widget.set_callback(move |_| {
-            sender.send(Message::SelectRegion(region));
+        let mut root = group::Flex::default().row();
+        root.set_margins(scale.px(14), scale.px(10), scale.px(14), scale.px(10));
+        root.set_spacing(scale.px(10));
+        root.set_frame(FrameType::RoundedBox);
+
+        let mut text_col = group::Flex::default().column();
+        text_col.set_spacing(scale.px(2));
+
+        let mut title = frame::Frame::default();
+        style_card_title(&mut title, scale);
+
+        let mut status = frame::Frame::default();
+        style_card_status(&mut status, scale);
+
+        text_col.end();
+
+        let mut ping_badge = frame::Frame::default();
+        style_ping_badge(&mut ping_badge, scale);
+
+        root.fixed(&ping_badge, scale.px(PING_BADGE_WIDTH));
+        root.end();
+
+        root.handle(move |_group, event| {
+            if matches!(event, Event::Released) && app::event_button() == 1 {
+                sender.send(Message::SelectRegion(region));
+                true
+            } else {
+                false
+            }
         });
 
         Self {
-            widget,
+            root,
+            title,
+            status,
+            ping_badge,
             region,
             ping_ms: None,
         }
     }
 
     fn refresh(&mut self, selected: bool, is_default: bool) {
-        self.widget.set_label(&region_button_label(
-            self.region,
-            self.ping_ms,
-            selected,
-            is_default,
-        ));
-        self.widget
-            .set_color(region_button_color(selected, is_default));
-        self.widget.redraw();
+        self.root.set_color(region_card_color(selected, is_default));
+        self.title
+            .set_label(&format!("{} {}", self.region.flag(), self.region));
+        self.status
+            .set_label(&region_status_label(selected, is_default, self.ping_ms));
+
+        let ping = ping_presentation(self.ping_ms);
+        self.ping_badge.set_color(ping.badge_color);
+        self.ping_badge.set_label(&ping_badge_label(self.ping_ms));
+
+        self.root.redraw();
     }
 }
 
@@ -657,22 +699,22 @@ enum Message {
 
 #[cfg(test)]
 mod app_tests {
-    use super::{countdown_message, ping_presentation, region_button_label, selection_summary};
+    use super::{
+        countdown_message, ping_badge_label, ping_presentation, region_status_label,
+        selection_summary,
+    };
     use crate::domain::Region;
 
     #[test]
-    fn region_button_label_should_show_selected_default_state() {
-        let label = region_button_label(Region::Europe, Some(82), true, true);
-        assert_eq!(label, "🇪🇺 Europe\nSelected • Default region • Good • 82 ms");
+    fn region_status_label_should_show_selected_default_state() {
+        let label = region_status_label(true, true, Some(82));
+        assert_eq!(label, "Selected • default region • Good");
     }
 
     #[test]
     fn selection_summary_should_mark_default_region() {
         let (summary, _) = selection_summary(Region::Asia, Region::Asia, Some(74));
-        assert_eq!(
-            summary,
-            "Selected: Asia • Excellent • 74 ms • Default region"
-        );
+        assert_eq!(summary, "Ready: Asia • 74 ms • Excellent • Default");
     }
 
     #[test]
@@ -687,5 +729,10 @@ mod app_tests {
     fn ping_presentation_should_return_muted_state_when_unavailable() {
         let ping = ping_presentation(None);
         assert_eq!(ping.description, "Measuring ping");
+    }
+
+    #[test]
+    fn ping_badge_label_should_show_placeholder_when_ping_is_unknown() {
+        assert_eq!(ping_badge_label(None), "-- ms");
     }
 }
