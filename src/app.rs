@@ -40,6 +40,7 @@ const PING_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
 const TITLE_HEIGHT: i32 = 24;
 const SUBTITLE_HEIGHT: i32 = 16;
 const REGION_CARD_HEIGHT: i32 = 64;
+const COUNTDOWN_LABEL_HEIGHT: i32 = 18;
 const ACTION_ROW_HEIGHT: i32 = 40;
 const CARD_ACCENT_WIDTH: i32 = 5;
 const PING_BADGE_WIDTH: i32 = 70;
@@ -79,7 +80,7 @@ pub fn run() -> Result<(), Error> {
     wind.end();
 
     let countdown = Rc::new(RefCell::new(CountdownState::new(COUNTDOWN_SECONDS)));
-    bind_window_click_cancel(&mut wind, sender);
+    bind_window_click_cancel(&mut wind, sender, ui.interactive_areas());
 
     wind.show();
 
@@ -125,14 +126,47 @@ fn spawn_ping_threads(sender: app::Sender<Message>) {
     }
 }
 
-fn bind_window_click_cancel(wind: &mut window::Window, sender: app::Sender<Message>) {
+fn bind_window_click_cancel(
+    wind: &mut window::Window,
+    sender: app::Sender<Message>,
+    interactive_areas: Vec<InteractiveArea>,
+) {
     wind.handle(move |_wind, event| {
-        if matches!(event, Event::Push) {
+        if matches!(event, Event::Push)
+            && !point_hits_interactive_area(app::event_x(), app::event_y(), &interactive_areas)
+        {
             sender.send(Message::CancelCountdown);
         }
 
         false
     });
+}
+
+fn point_hits_interactive_area(x: i32, y: i32, areas: &[InteractiveArea]) -> bool {
+    areas.iter().any(|area| area.contains(x, y))
+}
+
+#[derive(Debug, Clone, Copy)]
+struct InteractiveArea {
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+}
+
+impl InteractiveArea {
+    fn from_widget(widget: &impl WidgetExt) -> Self {
+        Self {
+            x: widget.x(),
+            y: widget.y(),
+            w: widget.w(),
+            h: widget.h(),
+        }
+    }
+
+    fn contains(self, x: i32, y: i32) -> bool {
+        x >= self.x && x < self.x + self.w && y >= self.y && y < self.y + self.h
+    }
 }
 
 fn handle_message(
@@ -262,6 +296,7 @@ fn scaled_window_height(scale: UiScale) -> i32 {
         REGION_CARD_HEIGHT,
         REGION_CARD_HEIGHT,
         REGION_CARD_HEIGHT,
+        COUNTDOWN_LABEL_HEIGHT,
         ACTION_ROW_HEIGHT,
     ];
 
@@ -349,11 +384,8 @@ fn ping_badge_label(ping_ms: Option<u32>) -> String {
     }
 }
 
-fn launch_button_label(region: Region, countdown_seconds: Option<i32>) -> String {
-    match countdown_seconds {
-        Some(seconds) => format!("Auto-launch in {seconds}s"),
-        None => format!("Launch {region}"),
-    }
+fn countdown_message(seconds: i32) -> String {
+    format!("Auto-launch in {seconds}s")
 }
 
 fn region_title_label(region: Region, is_default: bool) -> String {
@@ -386,6 +418,13 @@ fn style_action_button(btn: &mut button::Button, scale: UiScale, color: Color) {
     btn.set_label_font(Font::HelveticaBold);
 }
 
+fn style_countdown_label(frame: &mut frame::Frame, scale: UiScale) {
+    frame.set_label_size(scale.px(10));
+    frame.set_label_color(COUNTDOWN_TEXT_COLOR);
+    frame.set_label_font(Font::HelveticaBold);
+    frame.set_align(Align::Left | Align::Inside);
+}
+
 fn style_card_title(frame: &mut frame::Frame, scale: UiScale) {
     frame.set_label_size(scale.px(13));
     frame.set_label_color(BODY_TEXT_COLOR);
@@ -410,6 +449,7 @@ fn style_ping_badge(frame: &mut frame::Frame, scale: UiScale) {
 
 struct Ui {
     cards: Vec<RegionCard>,
+    countdown_label: frame::Frame,
     launch_button: button::Button,
     default_button: button::Button,
     selected_region: Region,
@@ -442,6 +482,10 @@ impl Ui {
             layout.fixed(&card.root, scale.px(REGION_CARD_HEIGHT));
         }
 
+        let mut countdown_label = frame::Frame::default();
+        style_countdown_label(&mut countdown_label, scale);
+        layout.fixed(&countdown_label, scale.px(COUNTDOWN_LABEL_HEIGHT));
+
         let mut action_row = group::Flex::default().row();
         action_row.set_spacing(scale.px(8));
 
@@ -467,6 +511,7 @@ impl Ui {
 
         let mut ui = Self {
             cards,
+            countdown_label,
             launch_button,
             default_button,
             selected_region,
@@ -513,34 +558,43 @@ impl Ui {
             );
         }
 
-        self.launch_button.set_label(&launch_button_label(
-            self.selected_region,
-            self.countdown_seconds,
-        ));
+        self.launch_button
+            .set_label(&format!("Launch {}", self.selected_region));
 
         match self.countdown_seconds {
-            Some(_) => {
-                self.launch_button.set_color(Color::from_hex(0x7e6031));
-                self.launch_button.set_label_color(COUNTDOWN_TEXT_COLOR);
+            Some(seconds) => {
+                self.countdown_label.set_label(&countdown_message(seconds));
                 self.default_button.set_label("Cancel");
                 self.default_button.set_color(CANCEL_ACTION_COLOR);
                 self.default_button.set_label_color(Color::White);
             }
             None if self.selected_region == self.default_region => {
-                self.launch_button.set_color(PRIMARY_ACTION_COLOR);
-                self.launch_button.set_label_color(Color::White);
+                self.countdown_label.set_label("");
                 self.default_button.set_label("★");
                 self.default_button.set_color(Color::from_hex(0x243143));
                 self.default_button.set_label_color(TITLE_TEXT_COLOR);
             }
             None => {
-                self.launch_button.set_color(PRIMARY_ACTION_COLOR);
-                self.launch_button.set_label_color(Color::White);
+                self.countdown_label.set_label("");
                 self.default_button.set_label("☆");
                 self.default_button.set_color(SECONDARY_ACTION_COLOR);
                 self.default_button.set_label_color(BODY_TEXT_COLOR);
             }
         }
+
+        self.launch_button.set_color(PRIMARY_ACTION_COLOR);
+        self.launch_button.set_label_color(Color::White);
+    }
+
+    fn interactive_areas(&self) -> Vec<InteractiveArea> {
+        let mut areas = self
+            .cards
+            .iter()
+            .map(|card| InteractiveArea::from_widget(&card.root))
+            .collect::<Vec<_>>();
+        areas.push(InteractiveArea::from_widget(&self.launch_button));
+        areas.push(InteractiveArea::from_widget(&self.default_button));
+        areas
     }
 }
 
@@ -697,8 +751,7 @@ enum Message {
 
 #[cfg(test)]
 mod app_tests {
-    use super::{launch_button_label, ping_badge_label, ping_presentation, region_status_label};
-    use crate::domain::Region;
+    use super::{countdown_message, ping_badge_label, ping_presentation, region_status_label};
     use fltk::enums::Color;
 
     #[test]
@@ -708,12 +761,8 @@ mod app_tests {
     }
 
     #[test]
-    fn launch_button_label_should_switch_for_countdown() {
-        assert_eq!(launch_button_label(Region::Asia, None), "Launch Asia");
-        assert_eq!(
-            launch_button_label(Region::Asia, Some(4)),
-            "Auto-launch in 4s"
-        );
+    fn countdown_message_should_match_timer_label() {
+        assert_eq!(countdown_message(4), "Auto-launch in 4s");
     }
 
     #[test]
