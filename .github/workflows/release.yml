@@ -163,13 +163,10 @@ jobs:
         run: |
           version="${{ needs.prepare.outputs.version }}"
           archive_base="${{ env.BINARY_NAME }}-${version}-${{ matrix.platform }}"
-          staging_dir="dist/${archive_base}"
+          binary_dir="target/${{ matrix.target }}/release"
 
-          mkdir -p "$staging_dir"
-          cp "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" "$staging_dir/"
-          cp README.md "$staging_dir/"
-
-          tar -czf "dist/${archive_base}.tar.gz" -C dist "$archive_base"
+          mkdir -p dist
+          tar -czf "dist/${archive_base}.tar.gz" -C "$binary_dir" "${{ matrix.binary_name }}"
 
       - name: Package Windows archive
         if: runner.os == 'Windows'
@@ -177,13 +174,10 @@ jobs:
         run: |
           $version = "${{ needs.prepare.outputs.version }}"
           $archiveBase = "${{ env.BINARY_NAME }}-$version-${{ matrix.platform }}"
-          $stagingDir = "dist/$archiveBase"
+          $binaryPath = "target/${{ matrix.target }}/release/${{ matrix.binary_name }}"
 
-          New-Item -ItemType Directory -Force -Path $stagingDir | Out-Null
-          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" $stagingDir
-          Copy-Item README.md $stagingDir
-
-          Compress-Archive -Path "$stagingDir/*" -DestinationPath "dist/$archiveBase.zip" -Force
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path $binaryPath -DestinationPath "dist/$archiveBase.zip" -Force
 
       - name: Upload release asset
         env:
