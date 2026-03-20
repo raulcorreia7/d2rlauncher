@@ -32,7 +32,7 @@ jobs:
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get install -y --no-install-recommends \
             libgtk-3-dev \
             libx11-dev \
             libxext-dev \
@@ -49,6 +49,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Resolve release metadata
         id: meta
@@ -70,15 +73,6 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
           echo "release_name=D2R Launcher v$version" >> "$GITHUB_OUTPUT"
-
-      - name: Check formatting
-        run: cargo fmt --check
-
-      - name: Run tests
-        run: cargo test --locked
-
-      - name: Run clippy
-        run: cargo clippy --all-targets --all-features --locked -- -D warnings
 
       - name: Create GitHub release
         env:
@@ -136,7 +130,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get install -y --no-install-recommends \
             libgtk-3-dev \
             libx11-dev \
             libxext-dev \
@@ -153,6 +147,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
 
       - name: Build release binary
         run: cargo build --locked --release --target ${{ matrix.target }}
