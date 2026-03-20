@@ -191,6 +191,13 @@ fn handle_message(
             ui.set_selected_region(region);
             Ok(None)
         }
+        Message::LaunchRegion(region) => {
+            cancel_countdown(countdown, ui);
+            selection.selected_region = region;
+            ui.set_selected_region(region);
+            logln!("[d2rlauncher] Launching {}...", region);
+            Ok(Some(region))
+        }
         Message::LaunchSelected => {
             let region = selection.selected_region;
             cancel_countdown(countdown, ui);
@@ -386,6 +393,14 @@ fn favorite_button_label(is_default: bool) -> &'static str {
         "★"
     } else {
         "☆"
+    }
+}
+
+fn region_card_message(region: Region, is_double_click: bool) -> Message {
+    if is_double_click {
+        Message::LaunchRegion(region)
+    } else {
+        Message::SelectRegion(region)
     }
 }
 
@@ -633,7 +648,7 @@ impl RegionCard {
                 {
                     return false;
                 }
-                sender.send(Message::SelectRegion(region));
+                sender.send(region_card_message(region, app::event_clicks()));
                 true
             } else {
                 false
@@ -741,6 +756,7 @@ enum CountdownProgress {
 #[derive(Debug, Clone)]
 enum Message {
     SelectRegion(Region),
+    LaunchRegion(Region),
     LaunchSelected,
     AutoLaunch,
     Countdown(i32),
@@ -751,12 +767,32 @@ enum Message {
 
 #[cfg(test)]
 mod app_tests {
-    use super::{countdown_message, favorite_button_label, ping_badge_label, ping_presentation};
+    use super::{
+        countdown_message, favorite_button_label, ping_badge_label, ping_presentation,
+        region_card_message, Message,
+    };
+    use crate::domain::Region;
     use fltk::enums::Color;
 
     #[test]
     fn favorite_button_label_should_show_filled_star_for_saved_region() {
         assert_eq!(favorite_button_label(true), "★");
+    }
+
+    #[test]
+    fn region_card_message_should_select_on_single_click() {
+        assert!(matches!(
+            region_card_message(Region::Europe, false),
+            Message::SelectRegion(Region::Europe)
+        ));
+    }
+
+    #[test]
+    fn region_card_message_should_launch_on_double_click() {
+        assert!(matches!(
+            region_card_message(Region::Europe, true),
+            Message::LaunchRegion(Region::Europe)
+        ));
     }
 
     #[test]
