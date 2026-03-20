@@ -2,12 +2,14 @@ use std::time::Duration;
 
 use surge_ping::{Client, Config, PingIdentifier, PingSequence, ICMP};
 use tokio::runtime::{Builder, Runtime};
+use tokio::time::sleep;
 
 use crate::domain::Region;
 use crate::logln;
 
-const PING_COUNT: usize = 3;
+const PING_SAMPLE_COUNT: usize = 30;
 const PING_TIMEOUT_SECS: u64 = 2;
+const PING_SAMPLE_DELAY_MS: u64 = 250;
 
 pub struct PingMonitor {
     runtime: Runtime,
@@ -48,8 +50,8 @@ async fn measure_region(region: Region) -> Option<Duration> {
     let mut pinger = client.pinger(ip, PingIdentifier(0)).await;
     pinger.timeout(Duration::from_secs(PING_TIMEOUT_SECS));
 
-    let mut pings = Vec::with_capacity(PING_COUNT);
-    for i in 0..PING_COUNT {
+    let mut pings = Vec::with_capacity(PING_SAMPLE_COUNT);
+    for i in 0..PING_SAMPLE_COUNT {
         match pinger.ping(PingSequence(i as u16), &[0; 56]).await {
             Ok((_, duration)) => {
                 logln!("[ping] {} -> {:?}", host, duration);
@@ -59,10 +61,20 @@ async fn measure_region(region: Region) -> Option<Duration> {
                 logln!("[ping] {} -> error: {}", host, err);
             }
         }
+
+        if i + 1 < PING_SAMPLE_COUNT {
+            sleep(Duration::from_millis(PING_SAMPLE_DELAY_MS)).await;
+        }
     }
 
     let average = average_duration(&pings)?;
-    logln!("[ping] {} -> avg: {:?}", host, average);
+    logln!(
+        "[ping] {} -> avg from {}/{} samples: {:?}",
+        host,
+        pings.len(),
+        PING_SAMPLE_COUNT,
+        average
+    );
     Some(average)
 }
 

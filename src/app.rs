@@ -6,7 +6,7 @@ use fltk::{
     window,
 };
 use std::thread;
-use std::{cell::RefCell, rc::Rc, time::Duration};
+use std::{cell::RefCell, rc::Rc};
 
 use crate::config::Config;
 use crate::constants;
@@ -32,8 +32,6 @@ const DEFAULT_ACCENT_COLOR: Color = Color::from_hex(0x6f7f97);
 const IDLE_ACCENT_COLOR: Color = Color::from_hex(0x30435d);
 
 const COUNTDOWN_SECONDS: i32 = 5;
-const PING_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
-
 const TITLE_HEIGHT: i32 = 24;
 const REGION_CARD_HEIGHT: i32 = 64;
 const COUNTDOWN_LABEL_HEIGHT: i32 = 18;
@@ -110,15 +108,12 @@ fn spawn_ping_threads(sender: app::Sender<Message>) {
     for region in Region::ALL {
         thread::spawn(move || {
             let monitor = ping::PingMonitor::new();
-            loop {
-                let ping_ms = monitor
-                    .as_ref()
-                    .and_then(|monitor| monitor.measure(region))
-                    .map(|duration| duration.as_millis() as u32);
+            let ping_ms = monitor
+                .as_ref()
+                .and_then(|monitor| monitor.measure(region))
+                .map(|duration| duration.as_millis() as u32);
 
-                sender.send(Message::PingResult(region, ping_ms));
-                thread::sleep(PING_REFRESH_INTERVAL);
-            }
+            sender.send(Message::PingResult(region, ping_ms));
         });
     }
 }
