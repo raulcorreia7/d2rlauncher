@@ -18,26 +18,24 @@ use crate::ping;
 
 const ICON_DATA: &[u8] = include_bytes!("../icon.png");
 
-const WINDOW_COLOR: Color = Color::from_hex(0x0b1018);
-const IDLE_CARD_COLOR: Color = Color::from_hex(0x151e2c);
-const SELECTED_CARD_COLOR: Color = Color::from_hex(0x1a2638);
-const DEFAULT_CARD_COLOR: Color = Color::from_hex(0x172130);
-const PRIMARY_ACTION_COLOR: Color = Color::from_hex(0xb98532);
-const CANCEL_ACTION_COLOR: Color = Color::from_hex(0x2a3345);
+const WINDOW_COLOR: Color = Color::from_hex(0x0c1119);
+const IDLE_CARD_COLOR: Color = Color::from_hex(0x162131);
+const SELECTED_CARD_COLOR: Color = Color::from_hex(0x22324a);
+const PRIMARY_ACTION_COLOR: Color = Color::from_hex(0x3e67a8);
+const CANCEL_ACTION_COLOR: Color = Color::from_hex(0x253246);
 const TITLE_TEXT_COLOR: Color = Color::from_hex(0xf2d4a0);
-const BODY_TEXT_COLOR: Color = Color::from_hex(0xe8e2d6);
-const MUTED_TEXT_COLOR: Color = Color::from_hex(0x9da6b5);
+const BODY_TEXT_COLOR: Color = Color::from_hex(0xeee6da);
+const MUTED_TEXT_COLOR: Color = Color::from_hex(0x96a4b9);
 const BADGE_TEXT_COLOR: Color = Color::from_hex(0xf4f0e8);
-const COUNTDOWN_TEXT_COLOR: Color = Color::from_hex(0xf0c56f);
+const COUNTDOWN_TEXT_COLOR: Color = Color::from_hex(0xd8c08b);
 const SELECTED_ACCENT_COLOR: Color = Color::from_hex(0xd0a15c);
-const DEFAULT_ACCENT_COLOR: Color = Color::from_hex(0x6b7b93);
-const IDLE_ACCENT_COLOR: Color = Color::from_hex(0x273246);
+const DEFAULT_ACCENT_COLOR: Color = Color::from_hex(0x6f7f97);
+const IDLE_ACCENT_COLOR: Color = Color::from_hex(0x30435d);
 
 const COUNTDOWN_SECONDS: i32 = 5;
 const PING_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
 
 const TITLE_HEIGHT: i32 = 24;
-const SUBTITLE_HEIGHT: i32 = 16;
 const REGION_CARD_HEIGHT: i32 = 64;
 const COUNTDOWN_LABEL_HEIGHT: i32 = 18;
 const ACTION_ROW_HEIGHT: i32 = 40;
@@ -287,7 +285,6 @@ fn create_layout(scale: UiScale) -> group::Flex {
 fn scaled_window_height(scale: UiScale) -> i32 {
     let row_heights = [
         TITLE_HEIGHT,
-        SUBTITLE_HEIGHT,
         REGION_CARD_HEIGHT,
         REGION_CARD_HEIGHT,
         REGION_CARD_HEIGHT,
@@ -334,16 +331,16 @@ struct PingPresentation {
 fn ping_presentation(ping_ms: Option<u32>) -> PingPresentation {
     match ping_ms {
         Some(ms) if ms < 70 => PingPresentation {
-            badge_color: Color::from_hex(0x1d3a31),
+            badge_color: Color::from_hex(0x21493a),
         },
         Some(ms) if ms < 180 => PingPresentation {
-            badge_color: Color::from_hex(0x514315),
+            badge_color: Color::from_hex(0x67561f),
         },
         Some(_) => PingPresentation {
-            badge_color: Color::from_hex(0x5a2525),
+            badge_color: Color::from_hex(0x693030),
         },
         None => PingPresentation {
-            badge_color: Color::from_hex(0x24324b),
+            badge_color: Color::from_hex(0x2c3951),
         },
     }
 }
@@ -351,8 +348,7 @@ fn ping_presentation(ping_ms: Option<u32>) -> PingPresentation {
 fn region_card_color(selected: bool, is_default: bool) -> Color {
     match (selected, is_default) {
         (true, _) => SELECTED_CARD_COLOR,
-        (false, true) => DEFAULT_CARD_COLOR,
-        (false, false) => IDLE_CARD_COLOR,
+        (false, _) => IDLE_CARD_COLOR,
     }
 }
 
@@ -391,13 +387,6 @@ fn style_title(frame: &mut frame::Frame, scale: UiScale) {
     frame.set_label_size(scale.px(17));
     frame.set_label_color(TITLE_TEXT_COLOR);
     frame.set_label_font(Font::HelveticaBold);
-    frame.set_align(Align::Left | Align::Inside);
-}
-
-fn style_subtitle(frame: &mut frame::Frame, scale: UiScale) {
-    frame.set_label_size(scale.px(10));
-    frame.set_label_color(MUTED_TEXT_COLOR);
-    frame.set_label_font(Font::HelveticaItalic);
     frame.set_align(Align::Left | Align::Inside);
 }
 
@@ -461,10 +450,6 @@ impl Ui {
         let mut title = frame::Frame::default().with_label("Choose Your Region");
         style_title(&mut title, scale);
         layout.fixed(&title, scale.px(TITLE_HEIGHT));
-
-        let mut subtitle = frame::Frame::default().with_label("Select a region, then launch.");
-        style_subtitle(&mut subtitle, scale);
-        layout.fixed(&subtitle, scale.px(SUBTITLE_HEIGHT));
 
         let cards = Region::ALL
             .iter()
@@ -767,7 +752,7 @@ mod app_tests {
     #[test]
     fn ping_presentation_should_return_neutral_badge_when_unavailable() {
         let ping = ping_presentation(None);
-        assert_eq!(ping.badge_color, Color::from_hex(0x24324b));
+        assert_eq!(ping.badge_color, Color::from_hex(0x2c3951));
     }
 
     #[test]
@@ -778,6 +763,6 @@ mod app_tests {
     #[test]
     fn ping_presentation_should_keep_mid_latency_in_good_range() {
         let ping = ping_presentation(Some(154));
-        assert_eq!(ping.badge_color, Color::from_hex(0x514315));
+        assert_eq!(ping.badge_color, Color::from_hex(0x67561f));
     }
 }
