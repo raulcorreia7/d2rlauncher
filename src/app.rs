@@ -13,6 +13,7 @@ use crate::constants;
 use crate::domain::Region;
 use crate::error::Error;
 use crate::launcher;
+use crate::logln;
 use crate::ping;
 
 const ICON_DATA: &[u8] = include_bytes!("../icon.png");
@@ -25,15 +26,15 @@ const COUNTDOWN_LABEL_HEIGHT: i32 = 14;
 const REGION_BUTTON_HEIGHT: i32 = 28;
 
 pub fn run() -> Result<(), Error> {
-    eprintln!("[d2rlauncher] Starting...");
+    logln!("[d2rlauncher] Starting...");
     let app = app::App::default().with_scheme(app::Scheme::Gleam);
     setup_theme();
 
-    eprintln!("[d2rlauncher] Loading config...");
+    logln!("[d2rlauncher] Loading config...");
     let mut config = Config::load()?;
     let default_region = config.default_region.unwrap_or_default();
-    eprintln!("[d2rlauncher] Default region: {}", default_region);
-    eprintln!("[d2rlauncher] Quick launch: {}", config.quick_launch);
+    logln!("[d2rlauncher] Default region: {}", default_region);
+    logln!("[d2rlauncher] Quick launch: {}", config.quick_launch);
 
     let scale = app::screen_scale(0);
     let (win_width, win_height) = scaled_window_size(scale);
@@ -116,13 +117,13 @@ fn handle_message(
 ) -> Result<Option<Region>, Error> {
     match msg {
         Message::Launch(region) => {
-            eprintln!("[d2rlauncher] Launching {}...", region);
+            logln!("[d2rlauncher] Launching {}...", region);
             state.borrow_mut().cancel();
             Ok(Some(region))
         }
         Message::AutoLaunch if state.borrow().is_cancelled() => Ok(None),
         Message::AutoLaunch => {
-            eprintln!("[d2rlauncher] Auto-launching {}...", auto_launch_region);
+            logln!("[d2rlauncher] Auto-launching {}...", auto_launch_region);
             Ok(Some(auto_launch_region))
         }
         Message::Countdown(_) if state.borrow().is_cancelled() => Ok(None),
@@ -131,19 +132,19 @@ fn handle_message(
             Ok(None)
         }
         Message::CancelCountdown => {
-            eprintln!("[d2rlauncher] Countdown cancelled");
+            logln!("[d2rlauncher] Countdown cancelled");
             ui.clear_countdown();
             Ok(None)
         }
         Message::SetDefault(region) => {
-            eprintln!("[d2rlauncher] Setting default region to {}", region);
+            logln!("[d2rlauncher] Setting default region to {}", region);
             state.borrow_mut().cancel();
             ui.clear_countdown();
             ui.set_default_region(region);
 
             config.default_region = Some(region);
             config.save()?;
-            eprintln!("[d2rlauncher] Config saved");
+            logln!("[d2rlauncher] Config saved");
             Ok(None)
         }
         Message::PingResult(region, ping_ms) => {
@@ -205,8 +206,8 @@ fn create_layout(scale: f32) -> group::Flex {
 
 fn log_ping_result(region: Region, ping_ms: Option<u32>) {
     match ping_ms {
-        Some(ms) => eprintln!("[d2rlauncher] Ping {}: {}ms", region, ms),
-        None => eprintln!("[d2rlauncher] Ping {}: timeout", region),
+        Some(ms) => logln!("[d2rlauncher] Ping {}: {}ms", region, ms),
+        None => logln!("[d2rlauncher] Ping {}: timeout", region),
     }
 }
 

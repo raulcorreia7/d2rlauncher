@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::constants;
 use crate::domain::Region;
 use crate::error::Result;
+use crate::logln;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -49,10 +50,10 @@ impl Default for Config {
 impl Config {
     pub fn load() -> Result<Self> {
         let path = Self::config_path();
-        eprintln!("[config] Loading from: {}", path.display());
+        logln!("[config] Loading from: {}", path.display());
 
         if !path.exists() {
-            eprintln!("[config] File not found, creating default");
+            logln!("[config] File not found, creating default");
             let config = Self::default();
             config.save()?;
             return Ok(config);
@@ -60,13 +61,13 @@ impl Config {
 
         let content = std::fs::read_to_string(&path)?;
         let config: Self = serde_json::from_str(&content)?;
-        eprintln!("[config] Loaded successfully");
+        logln!("[config] Loaded successfully");
         Ok(config)
     }
 
     pub fn save(&self) -> Result<()> {
         let path = Self::config_path();
-        eprintln!("[config] Saving to: {}", path.display());
+        logln!("[config] Saving to: {}", path.display());
 
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -74,7 +75,7 @@ impl Config {
 
         let content = serde_json::to_string_pretty(self)?;
         std::fs::write(&path, content)?;
-        eprintln!("[config] Saved successfully");
+        logln!("[config] Saved successfully");
         Ok(())
     }
 

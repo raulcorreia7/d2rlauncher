@@ -6,9 +6,10 @@ use crate::config::{Config, LaunchMode};
 use crate::constants;
 use crate::domain::Region;
 use crate::error::{Error, Result};
+use crate::logln;
 
 pub fn launch(config: &Config, region: Region) -> Result<()> {
-    eprintln!("[launcher] Launch mode: {:?}", config.launch_mode);
+    logln!("[launcher] Launch mode: {:?}", config.launch_mode);
     match config.launch_mode {
         LaunchMode::Steam => launch_steam(region),
         LaunchMode::BattleNet => launch_battle_net(region),
@@ -25,10 +26,10 @@ fn launch_steam(region: Region) -> Result<()> {
         address
     );
 
-    eprintln!("[launcher] Steam URI: {}", steam_uri);
+    logln!("[launcher] Steam URI: {}", steam_uri);
     open_uri(&steam_uri, "Steam")?;
 
-    eprintln!("[launcher] Steam launch initiated");
+    logln!("[launcher] Steam launch initiated");
     Ok(())
 }
 
@@ -36,10 +37,10 @@ fn launch_battle_net(region: Region) -> Result<()> {
     let address = region.ping_host();
     let uri = format!("battlenet://d2r/?address={}", address);
 
-    eprintln!("[launcher] Battle.net URI: {}", uri);
+    logln!("[launcher] Battle.net URI: {}", uri);
     open_uri(&uri, "Battle.net")?;
 
-    eprintln!("[launcher] Battle.net launch initiated");
+    logln!("[launcher] Battle.net launch initiated");
     Ok(())
 }
 
@@ -55,7 +56,7 @@ fn launch_direct(config: &Config, region: Region) -> Result<()> {
     }
 
     let address = region.ping_host();
-    eprintln!("[launcher] Direct: {} -address {}", exe.display(), address);
+    logln!("[launcher] Direct: {} -address {}", exe.display(), address);
 
     let mut cmd = Command::new(exe);
     cmd.arg("-address").arg(address);
@@ -67,7 +68,7 @@ fn launch_direct(config: &Config, region: Region) -> Result<()> {
     cmd.spawn()
         .map_err(|e| Error::Launch(format!("Failed to spawn D2R: {e}")))?;
 
-    eprintln!("[launcher] Direct launch initiated");
+    logln!("[launcher] Direct launch initiated");
     Ok(())
 }
 
@@ -80,7 +81,7 @@ fn launch_custom(config: &Config, region: Region) -> Result<()> {
     let command = expand_custom_command(command, region);
 
     let shell = custom_shell_invocation(&command);
-    eprintln!(
+    logln!(
         "[launcher] Custom: {} {}",
         shell.program,
         shell.args.join(" ")
@@ -96,7 +97,7 @@ fn launch_custom(config: &Config, region: Region) -> Result<()> {
     cmd.spawn()
         .map_err(|e| Error::Launch(format!("Failed to run custom command: {e}")))?;
 
-    eprintln!("[launcher] Custom command initiated");
+    logln!("[launcher] Custom command initiated");
     Ok(())
 }
 

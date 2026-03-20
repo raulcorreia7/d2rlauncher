@@ -4,6 +4,7 @@ use surge_ping::{Client, Config, PingIdentifier, PingSequence, ICMP};
 use tokio::runtime::{Builder, Runtime};
 
 use crate::domain::Region;
+use crate::logln;
 
 const PING_COUNT: usize = 3;
 const PING_TIMEOUT_SECS: u64 = 2;
@@ -36,7 +37,7 @@ async fn measure_region(region: Region) -> Option<Duration> {
         .next()?
         .ip();
 
-    eprintln!("[ping] Resolved {} -> {}", host, ip);
+    logln!("[ping] Resolved {} -> {}", host, ip);
 
     let mut config_builder = Config::builder();
     if ip.is_ipv6() {
@@ -51,17 +52,17 @@ async fn measure_region(region: Region) -> Option<Duration> {
     for i in 0..PING_COUNT {
         match pinger.ping(PingSequence(i as u16), &[0; 56]).await {
             Ok((_, duration)) => {
-                eprintln!("[ping] {} -> {:?}", host, duration);
+                logln!("[ping] {} -> {:?}", host, duration);
                 pings.push(duration);
             }
             Err(err) => {
-                eprintln!("[ping] {} -> error: {}", host, err);
+                logln!("[ping] {} -> error: {}", host, err);
             }
         }
     }
 
     let average = average_duration(&pings)?;
-    eprintln!("[ping] {} -> avg: {:?}", host, average);
+    logln!("[ping] {} -> avg: {:?}", host, average);
     Some(average)
 }
 
