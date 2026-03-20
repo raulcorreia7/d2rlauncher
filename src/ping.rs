@@ -26,12 +26,18 @@ impl PingMonitor {
         Some(Self { runtime })
     }
 
-    pub fn measure(&self, region: Region) -> Option<Duration> {
-        self.runtime.block_on(measure_region(region))
+    pub fn sample_average<F>(&self, region: Region, on_update: F) -> Option<Duration>
+    where
+        F: FnMut(Duration),
+    {
+        self.runtime.block_on(measure_region(region, on_update))
     }
 }
 
-async fn measure_region(region: Region) -> Option<Duration> {
+async fn measure_region<F>(region: Region, mut on_update: F) -> Option<Duration>
+where
+    F: FnMut(Duration),
+{
     let host = region.ping_host();
     let ip = tokio::net::lookup_host(format!("{host}:0"))
         .await
@@ -50,12 +56,20 @@ async fn measure_region(region: Region) -> Option<Duration> {
     let mut pinger = client.pinger(ip, PingIdentifier(0)).await;
     pinger.timeout(Duration::from_secs(PING_TIMEOUT_SECS));
 
-    let mut pings = Vec::with_capacity(PING_SAMPLE_COUNT);
+    let mut average = RunningAverage::default();
     for i in 0..PING_SAMPLE_COUNT {
         match pinger.ping(PingSequence(i as u16), &[0; 56]).await {
             Ok((_, duration)) => {
-                logln!("[ping] {} -> {:?}", host, duration);
-                pings.push(duration);
+                let current_average = average.push(duration);
+                logln!(
+                    "[ping] {} -> sample {}/{}: {:?}, avg: {:?}",
+                    host,
+                    i + 1,
+                    PING_SAMPLE_COUNT,
+                    duration,
+                    current_average
+                );
+                on_update(current_average);
             }
             Err(err) => {
                 logln!("[ping] {} -> error: {}", host, err);
@@ -67,48 +81,79 @@ async fn measure_region(region: Region) -> Option<Duration> {
         }
     }
 
-    let average = average_duration(&pings)?;
+    let final_average = average.average()?;
     logln!(
         "[ping] {} -> avg from {}/{} samples: {:?}",
         host,
-        pings.len(),
+        average.sample_count(),
         PING_SAMPLE_COUNT,
-        average
+        final_average
     );
-    Some(average)
+    Some(final_average)
 }
 
-fn average_duration(samples: &[Duration]) -> Option<Duration> {
-    if samples.is_empty() {
-        return None;
+#[derive(Debug, Default)]
+struct RunningAverage {
+    total: Duration,
+    samples: u32,
+}
+
+impl RunningAverage {
+    fn push(&mut self, sample: Duration) -> Duration {
+        self.total += sample;
+        self.samples += 1;
+        self.average()
+            .expect("running average should exist after at least one sample")
     }
 
-    let sum: Duration = samples.iter().copied().sum();
-    Some(sum / samples.len() as u32)
+    fn average(&self) -> Option<Duration> {
+        if self.samples == 0 {
+            return None;
+        }
+
+        Some(self.total / self.samples)
+    }
+
+    fn sample_count(&self) -> u32 {
+        self.samples
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::average_duration;
+    use super::RunningAverage;
     use std::time::Duration;
 
-    mod average_duration_fn {
-        use super::{average_duration, Duration};
+    mod running_average {
+        use super::{Duration, RunningAverage};
 
         #[test]
         fn should_return_none_when_no_samples_are_available() {
-            assert_eq!(average_duration(&[]), None);
+            assert_eq!(RunningAverage::default().average(), None);
         }
 
         #[test]
         fn should_return_the_mean_duration_when_samples_exist() {
-            let samples = [
-                Duration::from_millis(30),
-                Duration::from_millis(60),
-                Duration::from_millis(90),
-            ];
+            let mut average = RunningAverage::default();
+            average.push(Duration::from_millis(30));
+            average.push(Duration::from_millis(60));
+            average.push(Duration::from_millis(90));
 
-            assert_eq!(average_duration(&samples), Some(Duration::from_millis(60)));
+            assert_eq!(average.average(), Some(Duration::from_millis(60)));
+        }
+
+        #[test]
+        fn push_should_return_the_updated_average() {
+            let mut average = RunningAverage::default();
+
+            assert_eq!(
+                average.push(Duration::from_millis(40)),
+                Duration::from_millis(40)
+            );
+            assert_eq!(
+                average.push(Duration::from_millis(80)),
+                Duration::from_millis(60)
+            );
         }
     }
 }

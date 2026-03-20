@@ -108,12 +108,18 @@ fn spawn_ping_threads(sender: app::Sender<Message>) {
     for region in Region::ALL {
         thread::spawn(move || {
             let monitor = ping::PingMonitor::new();
-            let ping_ms = monitor
-                .as_ref()
-                .and_then(|monitor| monitor.measure(region))
-                .map(|duration| duration.as_millis() as u32);
+            let final_ping_ms = monitor.as_ref().and_then(|monitor| {
+                monitor.sample_average(region, |average| {
+                    sender.send(Message::PingResult(
+                        region,
+                        Some(average.as_millis() as u32),
+                    ));
+                })
+            });
 
-            sender.send(Message::PingResult(region, ping_ms));
+            if final_ping_ms.is_none() {
+                sender.send(Message::PingResult(region, None));
+            }
         });
     }
 }
