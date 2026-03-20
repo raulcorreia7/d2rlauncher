@@ -26,7 +26,6 @@ const CANCEL_ACTION_COLOR: Color = Color::from_hex(0x253246);
 const TITLE_TEXT_COLOR: Color = Color::from_hex(0xf2d4a0);
 const BODY_TEXT_COLOR: Color = Color::from_hex(0xeee6da);
 const MUTED_TEXT_COLOR: Color = Color::from_hex(0x96a4b9);
-const BADGE_TEXT_COLOR: Color = Color::from_hex(0xf4f0e8);
 const COUNTDOWN_TEXT_COLOR: Color = Color::from_hex(0xd8c08b);
 const SELECTED_ACCENT_COLOR: Color = Color::from_hex(0xd0a15c);
 const DEFAULT_ACCENT_COLOR: Color = Color::from_hex(0x6f7f97);
@@ -325,22 +324,22 @@ impl UiScale {
 
 #[derive(Debug, Clone, Copy)]
 struct PingPresentation {
-    badge_color: Color,
+    text_color: Color,
 }
 
 fn ping_presentation(ping_ms: Option<u32>) -> PingPresentation {
     match ping_ms {
         Some(ms) if ms < 70 => PingPresentation {
-            badge_color: Color::from_hex(0x21493a),
+            text_color: Color::from_hex(0x7fd0a6),
         },
         Some(ms) if ms < 180 => PingPresentation {
-            badge_color: Color::from_hex(0x67561f),
+            text_color: Color::from_hex(0xd8c08b),
         },
         Some(_) => PingPresentation {
-            badge_color: Color::from_hex(0x693030),
+            text_color: Color::from_hex(0xdc8f8f),
         },
         None => PingPresentation {
-            badge_color: Color::from_hex(0x2c3951),
+            text_color: MUTED_TEXT_COLOR,
         },
     }
 }
@@ -421,11 +420,10 @@ fn style_favorite_button(btn: &mut button::Button, scale: UiScale) {
 }
 
 fn style_ping_badge(frame: &mut frame::Frame, scale: UiScale) {
-    frame.set_frame(FrameType::RoundedBox);
-    frame.set_label_size(scale.px(9));
-    frame.set_label_color(BADGE_TEXT_COLOR);
+    frame.set_frame(FrameType::NoBox);
+    frame.set_label_size(scale.px(11));
     frame.set_label_font(Font::HelveticaBold);
-    frame.set_align(Align::Center | Align::Inside);
+    frame.set_align(Align::Right | Align::Inside);
 }
 
 struct Ui {
@@ -651,7 +649,8 @@ impl RegionCard {
         self.title.set_label(&region_title_label(self.region));
 
         let ping = ping_presentation(self.ping_ms);
-        self.ping_badge.set_color(ping.badge_color);
+        self.ping_badge.set_color(self.root.color());
+        self.ping_badge.set_label_color(ping.text_color);
         self.ping_badge.set_label(&ping_badge_label(self.ping_ms));
 
         self.root.redraw();
@@ -752,7 +751,7 @@ mod app_tests {
     #[test]
     fn ping_presentation_should_return_neutral_badge_when_unavailable() {
         let ping = ping_presentation(None);
-        assert_eq!(ping.badge_color, Color::from_hex(0x2c3951));
+        assert_eq!(ping.text_color, Color::from_hex(0x96a4b9));
     }
 
     #[test]
@@ -763,6 +762,6 @@ mod app_tests {
     #[test]
     fn ping_presentation_should_keep_mid_latency_in_good_range() {
         let ping = ping_presentation(Some(154));
-        assert_eq!(ping.badge_color, Color::from_hex(0x67561f));
+        assert_eq!(ping.text_color, Color::from_hex(0xd8c08b));
     }
 }
