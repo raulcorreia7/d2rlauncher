@@ -10,7 +10,7 @@ use crate::logln;
 const PING_SAMPLE_COUNT: usize = 30;
 const PING_TIMEOUT_SECS: u64 = 2;
 const PING_SAMPLE_DELAY_MS: u64 = 500;
-const PING_UI_UPDATE_INTERVAL: u32 = 5;
+const PING_UI_UPDATE_INTERVAL: u32 = 3;
 
 pub struct PingMonitor {
     runtime: Runtime,
@@ -169,12 +169,12 @@ mod tests {
 
         #[test]
         fn should_return_false_before_a_batch_is_complete() {
-            assert!(!should_publish_running_average(4));
+            assert!(!should_publish_running_average(2));
         }
 
         #[test]
         fn should_return_true_when_a_batch_boundary_is_reached() {
-            assert!(should_publish_running_average(5));
+            assert!(should_publish_running_average(3));
         }
     }
 }
