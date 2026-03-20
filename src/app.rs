@@ -417,7 +417,7 @@ fn style_status_label(frame: &mut frame::Frame, scale: UiScale, color: Color) {
 }
 
 fn style_action_button(btn: &mut button::Button, scale: UiScale, color: Color) {
-    btn.set_frame(FrameType::UpBox);
+    btn.set_frame(FrameType::BorderBox);
     btn.set_color(color);
     btn.set_label_color(Color::White);
     btn.set_label_size(scale.px(11));
