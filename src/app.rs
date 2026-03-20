@@ -23,9 +23,11 @@ const IDLE_CARD_COLOR: Color = Color::from_hex(0x162131);
 const SELECTED_CARD_COLOR: Color = Color::from_hex(0x22324a);
 const PRIMARY_ACTION_COLOR: Color = Color::from_hex(0x2e7a57);
 const CANCEL_ACTION_COLOR: Color = Color::from_hex(0x253246);
+const INACTIVE_CANCEL_ACTION_COLOR: Color = Color::from_hex(0x1a2331);
 const TITLE_TEXT_COLOR: Color = Color::from_hex(0xf2d4a0);
 const BODY_TEXT_COLOR: Color = Color::from_hex(0xeee6da);
 const MUTED_TEXT_COLOR: Color = Color::from_hex(0x96a4b9);
+const INACTIVE_ACTION_TEXT_COLOR: Color = Color::from_hex(0x6c7889);
 const COUNTDOWN_TEXT_COLOR: Color = Color::from_hex(0xd8c08b);
 const SELECTED_ACCENT_COLOR: Color = Color::from_hex(0xd0a15c);
 const DEFAULT_ACCENT_COLOR: Color = Color::from_hex(0x6f7f97);
@@ -484,6 +486,7 @@ impl Ui {
 
         let mut cancel_button = button::Button::default();
         style_action_button(&mut cancel_button, scale, CANCEL_ACTION_COLOR);
+        cancel_button.set_label("Cancel");
 
         let cancel_sender = sender;
         cancel_button.set_callback(move |_| {
@@ -550,12 +553,16 @@ impl Ui {
         match self.countdown_seconds {
             Some(seconds) => {
                 self.countdown_label.set_label(&countdown_message(seconds));
-                self.cancel_button.set_label("Cancel");
-                self.cancel_button.show();
+                self.cancel_button.activate();
+                self.cancel_button.set_color(CANCEL_ACTION_COLOR);
+                self.cancel_button.set_label_color(Color::White);
             }
             None => {
                 self.countdown_label.set_label("");
-                self.cancel_button.hide();
+                self.cancel_button.deactivate();
+                self.cancel_button.set_color(INACTIVE_CANCEL_ACTION_COLOR);
+                self.cancel_button
+                    .set_label_color(INACTIVE_ACTION_TEXT_COLOR);
             }
         }
 
@@ -572,7 +579,7 @@ impl Ui {
             .map(|card| InteractiveArea::from_widget(&card.root))
             .collect::<Vec<_>>();
         areas.push(InteractiveArea::from_widget(&self.launch_button));
-        if self.cancel_button.visible() {
+        if self.cancel_button.active() {
             areas.push(InteractiveArea::from_widget(&self.cancel_button));
         }
         areas
