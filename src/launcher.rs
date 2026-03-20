@@ -63,8 +63,10 @@ fn open_uri(uri: &str, launcher_name: &str) -> Result<()> {
 
 fn find_direct_executable(config: &Config) -> Result<PathBuf> {
     let launcher_exe = std::env::current_exe().ok();
-    let candidates =
-        direct_executable_candidates(config.d2r_path.as_deref(), launcher_exe.as_deref());
+    let candidates = direct_executable_candidates(
+        config.resolved_d2r_path().as_deref(),
+        launcher_exe.as_deref(),
+    );
 
     for candidate in &candidates {
         if candidate.exists() {
