@@ -5,9 +5,8 @@ use fltk::{
     prelude::*,
     window,
 };
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::thread;
+use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use crate::config::Config;
 use crate::constants;
@@ -21,6 +20,9 @@ const ICON_DATA: &[u8] = include_bytes!("../icon.png");
 const DEFAULT_BTN_COLOR: Color = Color::from_hex(0x2d2d44);
 const HIGHLIGHT_BTN_COLOR: Color = Color::from_hex(0x4a3f6e);
 const COUNTDOWN_SECONDS: i32 = 5;
+const PING_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
+const COUNTDOWN_LABEL_HEIGHT: i32 = 14;
+const REGION_BUTTON_HEIGHT: i32 = 28;
 
 pub fn run() -> Result<(), Error> {
     eprintln!("[d2rlauncher] Starting...");
@@ -41,104 +43,31 @@ pub fn run() -> Result<(), Error> {
 
     let (sender, receiver) = app::channel::<Message>();
 
-    let button_refs: Vec<_> = create_region_buttons(default_region, sender, scale);
-    add_buttons_to_layout(&mut layout, &button_refs, scale);
-
-    let spacer = frame::Frame::default();
-    layout.fixed(&spacer, 0);
-
-    let mut countdown_label = create_countdown_label(scale);
-    layout.fixed(&countdown_label, (14.0 * scale) as i32);
+    let mut ui = Ui::new(default_region, sender, scale, &mut layout);
 
     layout.end();
     wind.end();
 
-    // Countdown state
-    let state = Rc::new(RefCell::new(CountdownState {
-        seconds: COUNTDOWN_SECONDS,
-        cancelled: false,
-        sender,
-    }));
+    let state = Rc::new(RefCell::new(CountdownState::new(COUNTDOWN_SECONDS)));
 
-    // Handle any window interaction to stop countdown
-    let state_clone = state.clone();
-    wind.handle(move |_wind, event| {
-        if matches!(event, Event::Push | Event::KeyDown | Event::MouseWheel) {
-            let mut s = state_clone.borrow_mut();
-            if !s.cancelled && s.seconds > 0 {
-                s.cancelled = true;
-                sender.send(Message::CancelCountdown);
-            }
-        }
-        false
-    });
+    bind_countdown_cancel(&mut wind, state.clone(), sender);
 
     wind.show();
 
     if config.quick_launch {
-        countdown_label.set_label(&format!("Auto-launch in {}s...", state.borrow().seconds));
+        ui.show_countdown(state.borrow().remaining_seconds());
+        schedule_countdown(state.clone(), sender);
     }
 
-    // Start countdown timer
-    if config.quick_launch {
-        schedule_countdown(state.clone());
-    }
-
-    // Start background ping measurements
     spawn_ping_threads(sender);
 
-    // Handle events
     while app.wait() {
         if let Some(msg) = receiver.recv() {
-            match msg {
-                Message::Launch(region) => {
-                    eprintln!("[d2rlauncher] Launching {}...", region);
-                    state.borrow_mut().cancelled = true;
-                    launch_region(&config, region)?;
-                    return Ok(());
-                }
-                Message::AutoLaunch => {
-                    if !state.borrow().cancelled {
-                        eprintln!("[d2rlauncher] Auto-launching {}...", default_region);
-                        launch_region(&config, default_region)?;
-                        return Ok(());
-                    }
-                }
-                Message::Countdown(secs) => {
-                    if !state.borrow().cancelled {
-                        countdown_label.set_label(&format!("Auto-launch in {}s...", secs));
-                    }
-                }
-                Message::CancelCountdown => {
-                    eprintln!("[d2rlauncher] Countdown cancelled");
-                    countdown_label.set_label("");
-                }
-                Message::SetDefault(region) => {
-                    eprintln!("[d2rlauncher] Setting default region to {}", region);
-                    state.borrow_mut().cancelled = true;
-                    countdown_label.set_label("");
-
-                    for (btn, r) in &button_refs {
-                        let mut btn = btn.borrow_mut();
-                        if *r == region {
-                            btn.set_color(HIGHLIGHT_BTN_COLOR);
-                        } else {
-                            btn.set_color(DEFAULT_BTN_COLOR);
-                        }
-                        btn.redraw();
-                    }
-
-                    config.default_region = Some(region);
-                    config.save()?;
-                    eprintln!("[d2rlauncher] Config saved");
-                }
-                Message::PingResult(region, ping_ms) => {
-                    match ping_ms {
-                        Some(ms) => eprintln!("[d2rlauncher] Ping {}: {}ms", region, ms),
-                        None => eprintln!("[d2rlauncher] Ping {}: timeout", region),
-                    }
-                    update_button_ping(&button_refs, region, ping_ms);
-                }
+            if let Some(region) =
+                handle_message(msg, &mut config, default_region, state.as_ref(), &mut ui)?
+            {
+                launcher::launch(&config, region)?;
+                return Ok(());
             }
         }
     }
@@ -148,73 +77,94 @@ pub fn run() -> Result<(), Error> {
 
 fn spawn_ping_threads(sender: app::Sender<Message>) {
     for region in Region::ALL {
-        thread::spawn(move || loop {
-            let ping_ms = ping::measure(region).map(|d| d.as_millis() as u32);
-            sender.send(Message::PingResult(region, ping_ms));
-            thread::sleep(std::time::Duration::from_secs(5));
+        thread::spawn(move || {
+            let monitor = ping::PingMonitor::new();
+            loop {
+                let ping_ms = monitor
+                    .as_ref()
+                    .and_then(|monitor| monitor.measure(region))
+                    .map(|duration| duration.as_millis() as u32);
+
+                sender.send(Message::PingResult(region, ping_ms));
+                thread::sleep(PING_REFRESH_INTERVAL);
+            }
         });
     }
 }
 
-fn update_button_ping(
-    buttons: &[(Rc<RefCell<button::Button>>, Region)],
-    region: Region,
-    ping_ms: Option<u32>,
+fn bind_countdown_cancel(
+    wind: &mut window::Window,
+    state: Rc<RefCell<CountdownState>>,
+    sender: app::Sender<Message>,
 ) {
-    for (btn, r) in buttons {
-        if *r == region {
-            let mut btn = btn.borrow_mut();
-            let (ping_str, color) = match ping_ms {
-                Some(ms) => {
-                    let color = if ms < 100 {
-                        Color::from_hex(0x4ade80)
-                    } else if ms < 200 {
-                        Color::from_hex(0xfbbf24)
-                    } else {
-                        Color::from_hex(0xf87171)
-                    };
-                    (format!("{}ms", ms), color)
-                }
-                None => ("--ms".to_string(), Color::from_hex(0x888888)),
-            };
-            let label = format!("{} {} {}", region.flag(), region, ping_str);
-            btn.set_label(&label);
-            btn.set_label_color(color);
-            btn.redraw();
-            break;
+    wind.handle(move |_wind, event| {
+        if matches!(event, Event::Push | Event::KeyDown | Event::MouseWheel)
+            && state.borrow_mut().cancel()
+        {
+            sender.send(Message::CancelCountdown);
+        }
+        false
+    });
+}
+
+fn handle_message(
+    msg: Message,
+    config: &mut Config,
+    auto_launch_region: Region,
+    state: &RefCell<CountdownState>,
+    ui: &mut Ui,
+) -> Result<Option<Region>, Error> {
+    match msg {
+        Message::Launch(region) => {
+            eprintln!("[d2rlauncher] Launching {}...", region);
+            state.borrow_mut().cancel();
+            Ok(Some(region))
+        }
+        Message::AutoLaunch if state.borrow().is_cancelled() => Ok(None),
+        Message::AutoLaunch => {
+            eprintln!("[d2rlauncher] Auto-launching {}...", auto_launch_region);
+            Ok(Some(auto_launch_region))
+        }
+        Message::Countdown(_) if state.borrow().is_cancelled() => Ok(None),
+        Message::Countdown(secs) => {
+            ui.show_countdown(secs);
+            Ok(None)
+        }
+        Message::CancelCountdown => {
+            eprintln!("[d2rlauncher] Countdown cancelled");
+            ui.clear_countdown();
+            Ok(None)
+        }
+        Message::SetDefault(region) => {
+            eprintln!("[d2rlauncher] Setting default region to {}", region);
+            state.borrow_mut().cancel();
+            ui.clear_countdown();
+            ui.set_default_region(region);
+
+            config.default_region = Some(region);
+            config.save()?;
+            eprintln!("[d2rlauncher] Config saved");
+            Ok(None)
+        }
+        Message::PingResult(region, ping_ms) => {
+            log_ping_result(region, ping_ms);
+            ui.update_ping(region, ping_ms);
+            Ok(None)
         }
     }
 }
 
-struct CountdownState {
-    seconds: i32,
-    cancelled: bool,
-    sender: app::Sender<Message>,
-}
-
-fn schedule_countdown(state: Rc<RefCell<CountdownState>>) {
-    app::add_timeout3(1.0, move |_| {
-        let mut s = state.borrow_mut();
-
-        if s.cancelled {
-            return;
+fn schedule_countdown(state: Rc<RefCell<CountdownState>>, sender: app::Sender<Message>) {
+    app::add_timeout3(1.0, move |_| match state.borrow_mut().tick() {
+        CountdownProgress::Cancelled => {}
+        CountdownProgress::Running(secs) => {
+            sender.send(Message::Countdown(secs));
+            schedule_countdown(state.clone(), sender);
         }
-
-        s.seconds -= 1;
-
-        if s.seconds > 0 {
-            s.sender.send(Message::Countdown(s.seconds));
-            drop(s);
-            schedule_countdown(state.clone());
-        } else {
-            s.sender.send(Message::AutoLaunch);
+        CountdownProgress::Complete => {
+            sender.send(Message::AutoLaunch);
         }
     });
-}
-
-fn launch_region(config: &Config, region: Region) -> Result<(), Error> {
-    launcher::launch(config, region)?;
-    Ok(())
 }
 
 fn setup_theme() {
@@ -253,30 +203,30 @@ fn create_layout(scale: f32) -> group::Flex {
     col
 }
 
-fn create_region_buttons(
-    default_region: Region,
-    sender: app::Sender<Message>,
-    scale: f32,
-) -> Vec<(Rc<RefCell<button::Button>>, Region)> {
-    Region::ALL
-        .iter()
-        .map(|&region| {
-            let btn = create_region_button(region, default_region, sender, scale);
-            (Rc::new(RefCell::new(btn)), region)
-        })
-        .collect()
+fn log_ping_result(region: Region, ping_ms: Option<u32>) {
+    match ping_ms {
+        Some(ms) => eprintln!("[d2rlauncher] Ping {}: {}ms", region, ms),
+        None => eprintln!("[d2rlauncher] Ping {}: timeout", region),
+    }
 }
 
-fn create_region_button(
-    region: Region,
-    default_region: Region,
-    sender: app::Sender<Message>,
-    scale: f32,
-) -> button::Button {
-    let is_default = region == default_region;
-    let label = format!("{} {}", region.flag(), region);
-    let mut btn = button::Button::default().with_label(&label);
+fn ping_display(ping_ms: Option<u32>) -> (String, Color) {
+    match ping_ms {
+        Some(ms) => {
+            let color = if ms < 100 {
+                Color::from_hex(0x4ade80)
+            } else if ms < 200 {
+                Color::from_hex(0xfbbf24)
+            } else {
+                Color::from_hex(0xf87171)
+            };
+            (format!("{ms}ms"), color)
+        }
+        None => ("--ms".to_string(), Color::from_hex(0x888888)),
+    }
+}
 
+fn style_region_button(btn: &mut button::Button, is_default: bool, scale: f32) {
     btn.set_color(if is_default {
         HIGHLIGHT_BTN_COLOR
     } else {
@@ -285,32 +235,6 @@ fn create_region_button(
     btn.set_label_color(Color::White);
     btn.set_label_size((11.0 * scale) as i32);
     btn.set_frame(FrameType::RoundedBox);
-
-    btn.set_callback(move |_| {
-        sender.send(Message::Launch(region));
-    });
-
-    btn.handle(move |_btn, event| {
-        if event == Event::Push && app::event_button() == 3 {
-            sender.send(Message::SetDefault(region));
-            true
-        } else {
-            false
-        }
-    });
-
-    btn
-}
-
-fn add_buttons_to_layout(
-    layout: &mut group::Flex,
-    buttons: &[(Rc<RefCell<button::Button>>, Region)],
-    scale: f32,
-) {
-    let height = (28.0 * scale) as i32;
-    for (btn, _) in buttons {
-        layout.fixed(&*btn.borrow(), height);
-    }
 }
 
 fn create_countdown_label(scale: f32) -> frame::Frame {
@@ -318,6 +242,167 @@ fn create_countdown_label(scale: f32) -> frame::Frame {
     frame.set_label_size((10.0 * scale) as i32);
     frame.set_label_color(Color::from_hex(0xf0b90b));
     frame
+}
+
+struct Ui {
+    buttons: Vec<RegionButton>,
+    countdown_label: frame::Frame,
+}
+
+impl Ui {
+    fn new(
+        default_region: Region,
+        sender: app::Sender<Message>,
+        scale: f32,
+        layout: &mut group::Flex,
+    ) -> Self {
+        let buttons = Region::ALL
+            .iter()
+            .map(|&region| RegionButton::new(region, default_region, sender, scale))
+            .collect::<Vec<_>>();
+
+        let button_height = (REGION_BUTTON_HEIGHT as f32 * scale) as i32;
+        for button in &buttons {
+            layout.fixed(&button.widget, button_height);
+        }
+
+        let spacer = frame::Frame::default();
+        layout.fixed(&spacer, 0);
+
+        let countdown_label_height = (COUNTDOWN_LABEL_HEIGHT as f32 * scale) as i32;
+        let countdown_label = create_countdown_label(scale);
+        layout.fixed(&countdown_label, countdown_label_height);
+
+        Self {
+            buttons,
+            countdown_label,
+        }
+    }
+
+    fn show_countdown(&mut self, seconds: i32) {
+        self.countdown_label
+            .set_label(&format!("Auto-launch in {seconds}s..."));
+    }
+
+    fn clear_countdown(&mut self) {
+        self.countdown_label.set_label("");
+    }
+
+    fn set_default_region(&mut self, region: Region) {
+        for button in &mut self.buttons {
+            button.set_default(button.region == region);
+        }
+    }
+
+    fn update_ping(&mut self, region: Region, ping_ms: Option<u32>) {
+        for button in &mut self.buttons {
+            if button.region == region {
+                button.update_ping(ping_ms);
+                break;
+            }
+        }
+    }
+}
+
+struct RegionButton {
+    widget: button::Button,
+    region: Region,
+}
+
+impl RegionButton {
+    fn new(
+        region: Region,
+        default_region: Region,
+        sender: app::Sender<Message>,
+        scale: f32,
+    ) -> Self {
+        let label = format!("{} {}", region.flag(), region);
+        let mut widget = button::Button::default().with_label(&label);
+        style_region_button(&mut widget, region == default_region, scale);
+
+        widget.set_callback(move |_| {
+            sender.send(Message::Launch(region));
+        });
+
+        widget.handle(move |_btn, event| {
+            if event == Event::Push && app::event_button() == 3 {
+                sender.send(Message::SetDefault(region));
+                true
+            } else {
+                false
+            }
+        });
+
+        Self { widget, region }
+    }
+
+    fn set_default(&mut self, is_default: bool) {
+        self.widget.set_color(if is_default {
+            HIGHLIGHT_BTN_COLOR
+        } else {
+            DEFAULT_BTN_COLOR
+        });
+        self.widget.redraw();
+    }
+
+    fn update_ping(&mut self, ping_ms: Option<u32>) {
+        let (ping_text, color) = ping_display(ping_ms);
+        let label = format!("{} {} {}", self.region.flag(), self.region, ping_text);
+        self.widget.set_label(&label);
+        self.widget.set_label_color(color);
+        self.widget.redraw();
+    }
+}
+
+struct CountdownState {
+    remaining_seconds: i32,
+    cancelled: bool,
+}
+
+impl CountdownState {
+    fn new(remaining_seconds: i32) -> Self {
+        Self {
+            remaining_seconds,
+            cancelled: false,
+        }
+    }
+
+    fn remaining_seconds(&self) -> i32 {
+        self.remaining_seconds
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.cancelled
+    }
+
+    fn cancel(&mut self) -> bool {
+        if self.cancelled || self.remaining_seconds <= 0 {
+            return false;
+        }
+
+        self.cancelled = true;
+        true
+    }
+
+    fn tick(&mut self) -> CountdownProgress {
+        if self.cancelled {
+            return CountdownProgress::Cancelled;
+        }
+
+        self.remaining_seconds -= 1;
+        if self.remaining_seconds > 0 {
+            CountdownProgress::Running(self.remaining_seconds)
+        } else {
+            CountdownProgress::Complete
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CountdownProgress {
+    Cancelled,
+    Running(i32),
+    Complete,
 }
 
 #[derive(Debug, Clone)]

@@ -1,4 +1,3 @@
-pub const APP_NAME: &str = "d2rlauncher";
 pub const APP_TITLE: &str = "D2R Launcher";
 
 pub const D2R_STEAM_APP_ID: &str = "2536520";
