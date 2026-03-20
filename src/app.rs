@@ -332,9 +332,9 @@ fn region_accent_color(selected: bool, is_default: bool) -> Color {
 
 fn region_status_label(selected: bool, is_default: bool, ping_ms: Option<u32>) -> String {
     let state = match (selected, is_default) {
-        (true, true) => "Selected • default",
+        (true, true) => "Selected • favorite",
         (true, false) => "Selected region",
-        (false, true) => "Default",
+        (false, true) => "Favorite",
         (false, false) => "Click to select",
     };
 
@@ -355,9 +355,11 @@ fn selection_summary(
 ) -> (String, Color) {
     let ping = ping_presentation(ping_ms);
     let summary = match ping_ms {
-        Some(ms) if region == default_region => format!("{region} selected • {ms} ms • default"),
+        Some(ms) if region == default_region => {
+            format!("{region} selected • {ms} ms • favorite")
+        }
         Some(ms) => format!("{region} selected • {ms} ms"),
-        None if region == default_region => format!("{region} selected • default"),
+        None if region == default_region => format!("{region} selected • favorite"),
         None => format!("{region} selected"),
     };
 
@@ -570,11 +572,10 @@ impl Ui {
             .set_label(&format!("Launch {}", self.selected_region));
 
         if self.selected_region == self.default_region {
-            self.default_button.set_label("Default saved");
+            self.default_button.set_label("★ Favorite");
             self.default_button.deactivate();
         } else {
-            self.default_button
-                .set_label(&format!("Save {} as default", self.selected_region));
+            self.default_button.set_label("☆ Favorite");
             self.default_button.activate();
         }
     }
@@ -749,13 +750,13 @@ mod app_tests {
     #[test]
     fn region_status_label_should_show_selected_default_state() {
         let label = region_status_label(true, true, Some(82));
-        assert_eq!(label, "Selected • default • Good");
+        assert_eq!(label, "Selected • favorite • Good");
     }
 
     #[test]
     fn selection_summary_should_mark_default_region() {
         let (summary, _) = selection_summary(Region::Asia, Region::Asia, Some(74));
-        assert_eq!(summary, "Asia selected • 74 ms • default");
+        assert_eq!(summary, "Asia selected • 74 ms • favorite");
     }
 
     #[test]
