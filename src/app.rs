@@ -21,16 +21,19 @@ const ICON_DATA: &[u8] = include_bytes!("../icon.png");
 const WINDOW_COLOR: Color = Color::from_hex(0x0b1220);
 const SURFACE_COLOR: Color = Color::from_hex(0x121b2e);
 const IDLE_CARD_COLOR: Color = Color::from_hex(0x162238);
-const SELECTED_CARD_COLOR: Color = Color::from_hex(0x1d2b43);
-const DEFAULT_CARD_COLOR: Color = Color::from_hex(0x162a2a);
-const SELECTED_DEFAULT_CARD_COLOR: Color = Color::from_hex(0x2a2618);
+const SELECTED_CARD_COLOR: Color = Color::from_hex(0x1b2941);
+const DEFAULT_CARD_COLOR: Color = Color::from_hex(0x172435);
 const PRIMARY_ACTION_COLOR: Color = Color::from_hex(0xc67a11);
 const SECONDARY_ACTION_COLOR: Color = Color::from_hex(0x24324b);
 const CANCEL_ACTION_COLOR: Color = Color::from_hex(0x475569);
 const TITLE_TEXT_COLOR: Color = Color::from_hex(0xf4e6cd);
+const BODY_TEXT_COLOR: Color = Color::from_hex(0xe2e8f0);
 const MUTED_TEXT_COLOR: Color = Color::from_hex(0x94a3b8);
 const BADGE_TEXT_COLOR: Color = Color::from_hex(0xe2e8f0);
 const COUNTDOWN_TEXT_COLOR: Color = Color::from_hex(0xfbbf24);
+const SELECTED_ACCENT_COLOR: Color = Color::from_hex(0xc67a11);
+const DEFAULT_ACCENT_COLOR: Color = Color::from_hex(0x2d7f7b);
+const IDLE_ACCENT_COLOR: Color = Color::from_hex(0x20314b);
 
 const COUNTDOWN_SECONDS: i32 = 5;
 const PING_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
@@ -41,8 +44,11 @@ const STATUS_HEIGHT: i32 = 42;
 const REGION_CARD_HEIGHT: i32 = 62;
 const COUNTDOWN_ROW_HEIGHT: i32 = 30;
 const ACTION_ROW_HEIGHT: i32 = 40;
-const PING_BADGE_WIDTH: i32 = 86;
+const CARD_ACCENT_WIDTH: i32 = 5;
+const PING_BADGE_WIDTH: i32 = 74;
 const CANCEL_BUTTON_WIDTH: i32 = 108;
+const LAYOUT_MARGIN: i32 = 14;
+const LAYOUT_SPACING: i32 = 8;
 
 pub fn run() -> Result<(), Error> {
     logln!("[d2rlauncher] Starting...");
@@ -208,7 +214,7 @@ fn create_window(scale: UiScale) -> window::Window {
     let mut wind = window::Window::default()
         .with_size(
             scale.px(constants::WINDOW_WIDTH),
-            scale.px(constants::WINDOW_HEIGHT),
+            scaled_window_height(scale),
         )
         .with_label(constants::APP_TITLE);
     wind.set_color(WINDOW_COLOR);
@@ -223,9 +229,33 @@ fn create_window(scale: UiScale) -> window::Window {
 
 fn create_layout(scale: UiScale) -> group::Flex {
     let mut col = group::Flex::default_fill().column();
-    col.set_margins(scale.px(14), scale.px(14), scale.px(14), scale.px(14));
-    col.set_spacing(scale.px(8));
+    col.set_margins(
+        scale.px(LAYOUT_MARGIN),
+        scale.px(LAYOUT_MARGIN),
+        scale.px(LAYOUT_MARGIN),
+        scale.px(LAYOUT_MARGIN),
+    );
+    col.set_spacing(scale.px(LAYOUT_SPACING));
     col
+}
+
+fn scaled_window_height(scale: UiScale) -> i32 {
+    let row_heights = [
+        TITLE_HEIGHT,
+        SUBTITLE_HEIGHT,
+        REGION_CARD_HEIGHT,
+        REGION_CARD_HEIGHT,
+        REGION_CARD_HEIGHT,
+        STATUS_HEIGHT,
+        COUNTDOWN_ROW_HEIGHT,
+        ACTION_ROW_HEIGHT,
+    ];
+
+    let content_height = row_heights.into_iter().sum::<i32>();
+    let spacing_height = LAYOUT_SPACING * (row_heights.len() as i32 - 1);
+    let margins_height = LAYOUT_MARGIN * 2;
+
+    scale.px(content_height + spacing_height + margins_height)
 }
 
 fn log_ping_result(region: Region, ping_ms: Option<u32>) {
@@ -261,24 +291,24 @@ struct PingPresentation {
 
 fn ping_presentation(ping_ms: Option<u32>) -> PingPresentation {
     match ping_ms {
-        Some(ms) if ms < 80 => PingPresentation {
-            badge_color: Color::from_hex(0x1b4332),
-            summary_color: Color::from_hex(0x4ade80),
+        Some(ms) if ms < 70 => PingPresentation {
+            badge_color: Color::from_hex(0x1d3a31),
+            summary_color: BODY_TEXT_COLOR,
             description: "Excellent",
         },
-        Some(ms) if ms < 140 => PingPresentation {
-            badge_color: Color::from_hex(0x5b4a11),
-            summary_color: Color::from_hex(0xfacc15),
+        Some(ms) if ms < 180 => PingPresentation {
+            badge_color: Color::from_hex(0x514315),
+            summary_color: BODY_TEXT_COLOR,
             description: "Good",
         },
         Some(_) => PingPresentation {
-            badge_color: Color::from_hex(0x5a1f1f),
-            summary_color: Color::from_hex(0xf87171),
+            badge_color: Color::from_hex(0x5a2525),
+            summary_color: BODY_TEXT_COLOR,
             description: "High ping",
         },
         None => PingPresentation {
             badge_color: Color::from_hex(0x24324b),
-            summary_color: MUTED_TEXT_COLOR,
+            summary_color: BODY_TEXT_COLOR,
             description: "Measuring ping",
         },
     }
@@ -286,18 +316,25 @@ fn ping_presentation(ping_ms: Option<u32>) -> PingPresentation {
 
 fn region_card_color(selected: bool, is_default: bool) -> Color {
     match (selected, is_default) {
-        (true, true) => SELECTED_DEFAULT_CARD_COLOR,
-        (true, false) => SELECTED_CARD_COLOR,
+        (true, _) => SELECTED_CARD_COLOR,
         (false, true) => DEFAULT_CARD_COLOR,
         (false, false) => IDLE_CARD_COLOR,
     }
 }
 
+fn region_accent_color(selected: bool, is_default: bool) -> Color {
+    match (selected, is_default) {
+        (true, _) => SELECTED_ACCENT_COLOR,
+        (false, true) => DEFAULT_ACCENT_COLOR,
+        (false, false) => IDLE_ACCENT_COLOR,
+    }
+}
+
 fn region_status_label(selected: bool, is_default: bool, ping_ms: Option<u32>) -> String {
     let state = match (selected, is_default) {
-        (true, true) => "Selected • default region",
+        (true, true) => "Selected • default",
         (true, false) => "Selected region",
-        (false, true) => "Default region",
+        (false, true) => "Default",
         (false, false) => "Click to select",
     };
 
@@ -318,14 +355,10 @@ fn selection_summary(
 ) -> (String, Color) {
     let ping = ping_presentation(ping_ms);
     let summary = match ping_ms {
-        Some(ms) if region == default_region => {
-            format!("Ready: {region} • {ms} ms • {} • Default", ping.description)
-        }
-        Some(ms) => format!("Ready: {region} • {ms} ms • {}", ping.description),
-        None if region == default_region => {
-            format!("Ready: {region} • {} • Default", ping.description)
-        }
-        None => format!("Ready: {region} • {}", ping.description),
+        Some(ms) if region == default_region => format!("{region} selected • {ms} ms • default"),
+        Some(ms) => format!("{region} selected • {ms} ms"),
+        None if region == default_region => format!("{region} selected • default"),
+        None => format!("{region} selected"),
     };
 
     (summary, ping.summary_color)
@@ -351,7 +384,7 @@ fn style_status_frame(frame: &mut frame::Frame, scale: UiScale, color: Color) {
     frame.set_frame(FrameType::RoundedBox);
     frame.set_color(SURFACE_COLOR);
     frame.set_label_color(color);
-    frame.set_label_size(scale.px(11));
+    frame.set_label_size(scale.px(10));
     frame.set_align(Align::Left | Align::Inside);
 }
 
@@ -364,7 +397,7 @@ fn style_action_button(btn: &mut button::Button, scale: UiScale, color: Color) {
 
 fn style_card_title(frame: &mut frame::Frame, scale: UiScale) {
     frame.set_label_size(scale.px(13));
-    frame.set_label_color(Color::White);
+    frame.set_label_color(BODY_TEXT_COLOR);
     frame.set_align(Align::Left | Align::Inside);
 }
 
@@ -376,7 +409,7 @@ fn style_card_status(frame: &mut frame::Frame, scale: UiScale) {
 
 fn style_ping_badge(frame: &mut frame::Frame, scale: UiScale) {
     frame.set_frame(FrameType::RoundedBox);
-    frame.set_label_size(scale.px(10));
+    frame.set_label_size(scale.px(9));
     frame.set_label_color(BADGE_TEXT_COLOR);
     frame.set_align(Align::Center | Align::Inside);
 }
@@ -556,6 +589,7 @@ impl Ui {
 
 struct RegionCard {
     root: group::Flex,
+    accent: frame::Frame,
     title: frame::Frame,
     status: frame::Frame,
     ping_badge: frame::Frame,
@@ -566,9 +600,12 @@ struct RegionCard {
 impl RegionCard {
     fn new(region: Region, sender: app::Sender<Message>, scale: UiScale) -> Self {
         let mut root = group::Flex::default().row();
-        root.set_margins(scale.px(14), scale.px(10), scale.px(14), scale.px(10));
-        root.set_spacing(scale.px(10));
+        root.set_margins(scale.px(10), scale.px(10), scale.px(14), scale.px(10));
+        root.set_spacing(scale.px(12));
         root.set_frame(FrameType::RoundedBox);
+
+        let mut accent = frame::Frame::default();
+        accent.set_frame(FrameType::FlatBox);
 
         let mut text_col = group::Flex::default().column();
         text_col.set_spacing(scale.px(2));
@@ -584,6 +621,7 @@ impl RegionCard {
         let mut ping_badge = frame::Frame::default();
         style_ping_badge(&mut ping_badge, scale);
 
+        root.fixed(&accent, scale.px(CARD_ACCENT_WIDTH));
         root.fixed(&ping_badge, scale.px(PING_BADGE_WIDTH));
         root.end();
 
@@ -598,6 +636,7 @@ impl RegionCard {
 
         Self {
             root,
+            accent,
             title,
             status,
             ping_badge,
@@ -608,6 +647,8 @@ impl RegionCard {
 
     fn refresh(&mut self, selected: bool, is_default: bool) {
         self.root.set_color(region_card_color(selected, is_default));
+        self.accent
+            .set_color(region_accent_color(selected, is_default));
         self.title
             .set_label(&format!("{} {}", self.region.flag(), self.region));
         self.status
@@ -708,13 +749,13 @@ mod app_tests {
     #[test]
     fn region_status_label_should_show_selected_default_state() {
         let label = region_status_label(true, true, Some(82));
-        assert_eq!(label, "Selected • default region • Good");
+        assert_eq!(label, "Selected • default • Good");
     }
 
     #[test]
     fn selection_summary_should_mark_default_region() {
         let (summary, _) = selection_summary(Region::Asia, Region::Asia, Some(74));
-        assert_eq!(summary, "Ready: Asia • 74 ms • Excellent • Default");
+        assert_eq!(summary, "Asia selected • 74 ms • default");
     }
 
     #[test]
@@ -734,5 +775,11 @@ mod app_tests {
     #[test]
     fn ping_badge_label_should_show_placeholder_when_ping_is_unknown() {
         assert_eq!(ping_badge_label(None), "-- ms");
+    }
+
+    #[test]
+    fn ping_presentation_should_keep_mid_latency_in_good_range() {
+        let ping = ping_presentation(Some(154));
+        assert_eq!(ping.description, "Good");
     }
 }
