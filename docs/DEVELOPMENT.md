@@ -37,6 +37,7 @@ cargo build --locked --release
 ### Add or change a launch mode
 - Update `src/config.rs` for config shape.
 - Update `src/launcher.rs` for behavior.
+- Supported modes are `steam` and `direct`.
 
 ### Change the launcher UI
 - Work in `src/app.rs`.
@@ -49,4 +50,5 @@ cargo build --locked --release
 
 ## Config
 - The app stores `config.json` next to the executable.
-- Main fields: `launch_mode`, `d2r_path`, `custom_command`, `quick_launch`, `default_region`
+- Main fields: `launch_mode`, `d2r_path`, `quick_launch`, `default_region`
+- `direct` first tries `d2r_path`, then `D2R.exe` next to the launcher binary.

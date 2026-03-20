@@ -13,8 +13,6 @@ pub struct Config {
     pub launch_mode: LaunchMode,
     #[serde(default)]
     pub d2r_path: Option<PathBuf>,
-    #[serde(default)]
-    pub custom_command: Option<String>,
     #[serde(default = "default_quick_launch")]
     pub quick_launch: bool,
     #[serde(default)]
@@ -26,9 +24,8 @@ pub struct Config {
 pub enum LaunchMode {
     #[default]
     Steam,
-    BattleNet,
+    #[serde(alias = "battle_net", alias = "custom")]
     Direct,
-    Custom,
 }
 
 fn default_quick_launch() -> bool {
@@ -40,7 +37,6 @@ impl Default for Config {
         Self {
             launch_mode: LaunchMode::Steam,
             d2r_path: None,
-            custom_command: None,
             quick_launch: true,
             default_region: None,
         }
@@ -89,5 +85,22 @@ impl Config {
         Self::config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join(constants::CONFIG_FILE)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Config, LaunchMode};
+
+    #[test]
+    fn launch_mode_should_map_legacy_battle_net_value_to_direct() {
+        let config: Config = serde_json::from_str(r#"{"launch_mode":"battle_net"}"#).unwrap();
+        assert_eq!(config.launch_mode, LaunchMode::Direct);
+    }
+
+    #[test]
+    fn launch_mode_should_map_legacy_custom_value_to_direct() {
+        let config: Config = serde_json::from_str(r#"{"launch_mode":"custom"}"#).unwrap();
+        assert_eq!(config.launch_mode, LaunchMode::Direct);
     }
 }
