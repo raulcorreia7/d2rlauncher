@@ -4,18 +4,12 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Release version from Cargo.toml, without the leading v"
-        required: true
-        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref_name || inputs.version || github.run_id }}
+  group: release-${{ github.ref_name }}
   cancel-in-progress: false
 
 env:
@@ -44,12 +38,7 @@ jobs:
         id: meta
         shell: bash
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            version="${{ inputs.version }}"
-          else
-            version="${GITHUB_REF_NAME#v}"
-          fi
-
+          version="${GITHUB_REF_NAME#v}"
           cargo_version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)"
 
           if [[ -z "$version" ]]; then
