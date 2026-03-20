@@ -18,22 +18,22 @@ use crate::ping;
 
 const ICON_DATA: &[u8] = include_bytes!("../icon.png");
 
-const WINDOW_COLOR: Color = Color::from_hex(0x090807);
-const SURFACE_COLOR: Color = Color::from_hex(0x15110d);
-const IDLE_CARD_COLOR: Color = Color::from_hex(0x1a1510);
-const SELECTED_CARD_COLOR: Color = Color::from_hex(0x201811);
-const DEFAULT_CARD_COLOR: Color = Color::from_hex(0x19140f);
-const PRIMARY_ACTION_COLOR: Color = Color::from_hex(0xa66a19);
-const SECONDARY_ACTION_COLOR: Color = Color::from_hex(0x2b2218);
-const CANCEL_ACTION_COLOR: Color = Color::from_hex(0x403427);
-const TITLE_TEXT_COLOR: Color = Color::from_hex(0xe3c48a);
-const BODY_TEXT_COLOR: Color = Color::from_hex(0xe6dccb);
-const MUTED_TEXT_COLOR: Color = Color::from_hex(0xb0a08a);
-const BADGE_TEXT_COLOR: Color = Color::from_hex(0xe2e8f0);
-const COUNTDOWN_TEXT_COLOR: Color = Color::from_hex(0xfbbf24);
-const SELECTED_ACCENT_COLOR: Color = Color::from_hex(0xd29a3a);
-const DEFAULT_ACCENT_COLOR: Color = Color::from_hex(0x7a6843);
-const IDLE_ACCENT_COLOR: Color = Color::from_hex(0x463729);
+const WINDOW_COLOR: Color = Color::from_hex(0x0b1018);
+const SURFACE_COLOR: Color = Color::from_hex(0x121925);
+const IDLE_CARD_COLOR: Color = Color::from_hex(0x151e2c);
+const SELECTED_CARD_COLOR: Color = Color::from_hex(0x1a2638);
+const DEFAULT_CARD_COLOR: Color = Color::from_hex(0x172130);
+const PRIMARY_ACTION_COLOR: Color = Color::from_hex(0xb98532);
+const SECONDARY_ACTION_COLOR: Color = Color::from_hex(0x1a2232);
+const CANCEL_ACTION_COLOR: Color = Color::from_hex(0x2a3345);
+const TITLE_TEXT_COLOR: Color = Color::from_hex(0xf2d4a0);
+const BODY_TEXT_COLOR: Color = Color::from_hex(0xe8e2d6);
+const MUTED_TEXT_COLOR: Color = Color::from_hex(0x9da6b5);
+const BADGE_TEXT_COLOR: Color = Color::from_hex(0xf4f0e8);
+const COUNTDOWN_TEXT_COLOR: Color = Color::from_hex(0xf0c56f);
+const SELECTED_ACCENT_COLOR: Color = Color::from_hex(0xd0a15c);
+const DEFAULT_ACCENT_COLOR: Color = Color::from_hex(0x6b7b93);
+const IDLE_ACCENT_COLOR: Color = Color::from_hex(0x273246);
 
 const COUNTDOWN_SECONDS: i32 = 5;
 const PING_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
@@ -41,14 +41,14 @@ const PING_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
 const TITLE_HEIGHT: i32 = 24;
 const SUBTITLE_HEIGHT: i32 = 16;
 const STATUS_ROW_HEIGHT: i32 = 42;
-const REGION_CARD_HEIGHT: i32 = 62;
+const REGION_CARD_HEIGHT: i32 = 64;
 const ACTION_ROW_HEIGHT: i32 = 40;
 const CARD_ACCENT_WIDTH: i32 = 5;
-const PING_BADGE_WIDTH: i32 = 74;
+const PING_BADGE_WIDTH: i32 = 70;
 const CANCEL_BUTTON_WIDTH: i32 = 108;
-const LAYOUT_MARGIN: i32 = 14;
-const LAYOUT_SPACING: i32 = 8;
-const PANEL_PADDING_X: i32 = 12;
+const LAYOUT_MARGIN: i32 = 16;
+const LAYOUT_SPACING: i32 = 10;
+const PANEL_PADDING_X: i32 = 14;
 const PANEL_PADDING_Y: i32 = 8;
 
 pub fn run() -> Result<(), Error> {
@@ -301,7 +301,6 @@ impl UiScale {
 struct PingPresentation {
     badge_color: Color,
     summary_color: Color,
-    description: &'static str,
 }
 
 fn ping_presentation(ping_ms: Option<u32>) -> PingPresentation {
@@ -309,22 +308,18 @@ fn ping_presentation(ping_ms: Option<u32>) -> PingPresentation {
         Some(ms) if ms < 70 => PingPresentation {
             badge_color: Color::from_hex(0x1d3a31),
             summary_color: BODY_TEXT_COLOR,
-            description: "Excellent",
         },
         Some(ms) if ms < 180 => PingPresentation {
             badge_color: Color::from_hex(0x514315),
             summary_color: BODY_TEXT_COLOR,
-            description: "Good",
         },
         Some(_) => PingPresentation {
             badge_color: Color::from_hex(0x5a2525),
             summary_color: BODY_TEXT_COLOR,
-            description: "High ping",
         },
         None => PingPresentation {
             badge_color: Color::from_hex(0x24324b),
             summary_color: BODY_TEXT_COLOR,
-            description: "Measuring ping",
         },
     }
 }
@@ -345,15 +340,12 @@ fn region_accent_color(selected: bool, is_default: bool) -> Color {
     }
 }
 
-fn region_status_label(selected: bool, is_default: bool, ping_ms: Option<u32>) -> String {
-    let state = match (selected, is_default) {
-        (true, true) => "Selected • favorite",
-        (true, false) => "Selected region",
-        (false, true) => "Favorite",
-        (false, false) => "Click to select",
-    };
-
-    format!("{state} • {}", ping_presentation(ping_ms).description)
+fn region_status_label(selected: bool, is_default: bool) -> String {
+    match (selected, is_default) {
+        (true, _) => "Selected".to_string(),
+        (false, true) => "Favorite".to_string(),
+        (false, false) => String::new(),
+    }
 }
 
 fn ping_badge_label(ping_ms: Option<u32>) -> String {
@@ -365,35 +357,40 @@ fn ping_badge_label(ping_ms: Option<u32>) -> String {
 
 fn ready_message(region: Region, ping_ms: Option<u32>) -> (String, Color) {
     let ping = ping_presentation(ping_ms);
-    let label = match ping_ms {
-        Some(ms) => format!("Ready to launch {region} • {ms} ms"),
-        None => format!("Ready to launch {region}"),
-    };
+    let label = format!("Ready to launch {region}");
 
     (label, ping.summary_color)
 }
 
-fn countdown_message(region: Region, seconds: i32) -> String {
-    format!("Auto-launching {region} in {seconds}s")
+fn countdown_message(_region: Region, seconds: i32) -> String {
+    format!("Auto-launch in {seconds}s")
+}
+
+fn region_title_label(region: Region, is_default: bool) -> String {
+    if is_default {
+        format!("{} {}  ★", region.flag(), region)
+    } else {
+        format!("{} {}", region.flag(), region)
+    }
 }
 
 fn style_title(frame: &mut frame::Frame, scale: UiScale) {
-    frame.set_label_size(scale.px(16));
+    frame.set_label_size(scale.px(17));
     frame.set_label_color(TITLE_TEXT_COLOR);
-    frame.set_label_font(Font::TimesBold);
+    frame.set_label_font(Font::HelveticaBold);
     frame.set_align(Align::Left | Align::Inside);
 }
 
 fn style_subtitle(frame: &mut frame::Frame, scale: UiScale) {
     frame.set_label_size(scale.px(10));
     frame.set_label_color(MUTED_TEXT_COLOR);
-    frame.set_label_font(Font::TimesItalic);
+    frame.set_label_font(Font::HelveticaItalic);
     frame.set_align(Align::Left | Align::Inside);
 }
 
 fn create_status_panel(scale: UiScale, label_color: Color) -> (group::Flex, frame::Frame) {
     let mut panel = group::Flex::default().row();
-    panel.set_frame(FrameType::BorderBox);
+    panel.set_frame(FrameType::RoundedBox);
     panel.set_color(SURFACE_COLOR);
     panel.set_margins(
         scale.px(PANEL_PADDING_X),
@@ -412,37 +409,37 @@ fn create_status_panel(scale: UiScale, label_color: Color) -> (group::Flex, fram
 fn style_status_label(frame: &mut frame::Frame, scale: UiScale, color: Color) {
     frame.set_label_color(color);
     frame.set_label_size(scale.px(10));
-    frame.set_label_font(Font::Times);
+    frame.set_label_font(Font::Helvetica);
     frame.set_align(Align::Left | Align::Inside);
 }
 
 fn style_action_button(btn: &mut button::Button, scale: UiScale, color: Color) {
-    btn.set_frame(FrameType::BorderBox);
+    btn.set_frame(FrameType::RoundedBox);
     btn.set_color(color);
     btn.set_label_color(Color::White);
     btn.set_label_size(scale.px(11));
-    btn.set_label_font(Font::TimesBold);
+    btn.set_label_font(Font::HelveticaBold);
 }
 
 fn style_card_title(frame: &mut frame::Frame, scale: UiScale) {
     frame.set_label_size(scale.px(13));
     frame.set_label_color(BODY_TEXT_COLOR);
-    frame.set_label_font(Font::TimesBold);
+    frame.set_label_font(Font::HelveticaBold);
     frame.set_align(Align::Left | Align::Inside);
 }
 
 fn style_card_status(frame: &mut frame::Frame, scale: UiScale) {
     frame.set_label_size(scale.px(10));
     frame.set_label_color(MUTED_TEXT_COLOR);
-    frame.set_label_font(Font::Times);
+    frame.set_label_font(Font::Helvetica);
     frame.set_align(Align::Left | Align::Inside);
 }
 
 fn style_ping_badge(frame: &mut frame::Frame, scale: UiScale) {
-    frame.set_frame(FrameType::BorderBox);
+    frame.set_frame(FrameType::RoundedBox);
     frame.set_label_size(scale.px(9));
     frame.set_label_color(BADGE_TEXT_COLOR);
-    frame.set_label_font(Font::TimesBold);
+    frame.set_label_font(Font::HelveticaBold);
     frame.set_align(Align::Center | Align::Inside);
 }
 
@@ -469,8 +466,7 @@ impl Ui {
         style_title(&mut title, scale);
         layout.fixed(&title, scale.px(TITLE_HEIGHT));
 
-        let mut subtitle =
-            frame::Frame::default().with_label("Choose your gateway into Sanctuary.");
+        let mut subtitle = frame::Frame::default().with_label("Select a region, then launch.");
         style_subtitle(&mut subtitle, scale);
         layout.fixed(&subtitle, scale.px(SUBTITLE_HEIGHT));
 
@@ -595,11 +591,11 @@ impl Ui {
 
         if self.selected_region == self.default_region {
             self.default_button.set_label("★ Favorite");
-            self.default_button.set_color(Color::from_hex(0x3a2d1c));
+            self.default_button.set_color(Color::from_hex(0x243143));
             self.default_button.set_label_color(TITLE_TEXT_COLOR);
             self.default_button.activate();
         } else {
-            self.default_button.set_label("☆ Favorite");
+            self.default_button.set_label("☆ Save Favorite");
             self.default_button.set_color(SECONDARY_ACTION_COLOR);
             self.default_button.set_label_color(BODY_TEXT_COLOR);
             self.default_button.activate();
@@ -677,9 +673,9 @@ impl RegionCard {
         self.accent
             .set_color(region_accent_color(selected, is_default));
         self.title
-            .set_label(&format!("{} {}", self.region.flag(), self.region));
+            .set_label(&region_title_label(self.region, is_default));
         self.status
-            .set_label(&region_status_label(selected, is_default, self.ping_ms));
+            .set_label(&region_status_label(selected, is_default));
 
         let ping = ping_presentation(self.ping_ms);
         self.ping_badge.set_color(ping.badge_color);
@@ -769,33 +765,32 @@ enum Message {
 mod app_tests {
     use super::{
         countdown_message, ping_badge_label, ping_presentation, ready_message, region_status_label,
+        BODY_TEXT_COLOR,
     };
     use crate::domain::Region;
+    use fltk::enums::Color;
 
     #[test]
     fn region_status_label_should_show_selected_default_state() {
-        let label = region_status_label(true, true, Some(82));
-        assert_eq!(label, "Selected • favorite • Good");
+        let label = region_status_label(true, true);
+        assert_eq!(label, "Selected");
     }
 
     #[test]
     fn ready_message_should_focus_on_launch_action() {
         let (summary, _) = ready_message(Region::Asia, Some(74));
-        assert_eq!(summary, "Ready to launch Asia • 74 ms");
+        assert_eq!(summary, "Ready to launch Asia");
     }
 
     #[test]
     fn countdown_message_should_reference_selected_region() {
-        assert_eq!(
-            countdown_message(Region::Americas, 3),
-            "Auto-launching Americas in 3s"
-        );
+        assert_eq!(countdown_message(Region::Americas, 3), "Auto-launch in 3s");
     }
 
     #[test]
-    fn ping_presentation_should_return_muted_state_when_unavailable() {
+    fn ping_presentation_should_return_body_text_summary_color() {
         let ping = ping_presentation(None);
-        assert_eq!(ping.description, "Measuring ping");
+        assert_eq!(ping.summary_color, BODY_TEXT_COLOR);
     }
 
     #[test]
@@ -806,6 +801,6 @@ mod app_tests {
     #[test]
     fn ping_presentation_should_keep_mid_latency_in_good_range() {
         let ping = ping_presentation(Some(154));
-        assert_eq!(ping.description, "Good");
+        assert_eq!(ping.badge_color, Color::from_hex(0x514315));
     }
 }
