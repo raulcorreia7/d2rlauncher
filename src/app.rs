@@ -117,8 +117,16 @@ fn spawn_ping_threads(sender: app::Sender<Message>) {
                 })
             });
 
-            if final_ping_ms.is_none() {
-                sender.send(Message::PingResult(region, None));
+            match final_ping_ms {
+                Some(average) => {
+                    sender.send(Message::PingResult(
+                        region,
+                        Some(average.as_millis() as u32),
+                    ));
+                }
+                None => {
+                    sender.send(Message::PingResult(region, None));
+                }
             }
         });
     }

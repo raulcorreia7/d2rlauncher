@@ -9,7 +9,8 @@ use crate::logln;
 
 const PING_SAMPLE_COUNT: usize = 30;
 const PING_TIMEOUT_SECS: u64 = 2;
-const PING_SAMPLE_DELAY_MS: u64 = 250;
+const PING_SAMPLE_DELAY_MS: u64 = 500;
+const PING_UI_UPDATE_INTERVAL: u32 = 5;
 
 pub struct PingMonitor {
     runtime: Runtime,
@@ -69,7 +70,9 @@ where
                     duration,
                     current_average
                 );
-                on_update(current_average);
+                if should_publish_running_average(average.sample_count()) {
+                    on_update(current_average);
+                }
             }
             Err(err) => {
                 logln!("[ping] {} -> error: {}", host, err);
@@ -119,9 +122,13 @@ impl RunningAverage {
     }
 }
 
+fn should_publish_running_average(successful_samples: u32) -> bool {
+    successful_samples != 0 && successful_samples % PING_UI_UPDATE_INTERVAL == 0
+}
+
 #[cfg(test)]
 mod tests {
-    use super::RunningAverage;
+    use super::{should_publish_running_average, RunningAverage};
     use std::time::Duration;
 
     mod running_average {
@@ -154,6 +161,20 @@ mod tests {
                 average.push(Duration::from_millis(80)),
                 Duration::from_millis(60)
             );
+        }
+    }
+
+    mod should_publish_running_average_fn {
+        use super::should_publish_running_average;
+
+        #[test]
+        fn should_return_false_before_a_batch_is_complete() {
+            assert!(!should_publish_running_average(4));
+        }
+
+        #[test]
+        fn should_return_true_when_a_batch_boundary_is_reached() {
+            assert!(should_publish_running_average(5));
         }
     }
 }
