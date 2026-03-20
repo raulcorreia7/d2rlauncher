@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.3] - 2026-03-20
+
+- docs: add minimal project guides
+- ci: update checkout action
+
+
 ## [0.1.2] - 2026-03-20
 
 - ci: speed up workflows
